@@ -394,7 +394,11 @@ private fun RecordCard(record: RecordWithAttachments, onClick: () -> Unit) {
                 Text(
                     text = doorLine.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (item.doorIntact == TriState.NO) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
             Spacer(Modifier.height(12.dp))
