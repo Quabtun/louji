@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T05:30:00Z",
+  "title": "Design System: 楼记 LouJi",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#121517",
+        "tonalRamp": ["#0A0C0D", "#121517", "#1C1F22", "#2A2D30", "#3F4143", "#777A75", "#C5C6C1", "#E8E6E1"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Concrete Paper",
+        "canonical": "#F4F1EA",
+        "tonalRamp": ["#2A2927", "#4A4843", "#6B6862", "#908C84", "#B8B3A9", "#D8D3C8", "#E6E1D6", "#F4F1EA"]
+      },
+      "safety-amber": {
+        "role": "primary",
+        "displayName": "Safety Amber",
+        "canonical": "#FFC83D",
+        "tonalRamp": ["#3A2A00", "#5C4300", "#7A5900", "#A87900", "#D6A400", "#FFC83D", "#FFDB7A", "#FFEEB8"]
+      },
+      "amber-deep": {
+        "role": "primary",
+        "displayName": "Amber Deep",
+        "canonical": "#6A4B00",
+        "tonalRamp": ["#241A00", "#3A2A00", "#4A3600", "#5A4300", "#6A4B00", "#8A5A00", "#B07A00", "#FFE08A"]
+      },
+      "signal-green": {
+        "role": "secondary",
+        "displayName": "Signal Green",
+        "canonical": "#1F6B45",
+        "tonalRamp": ["#06281A", "#0B3E28", "#0F5132", "#176B45", "#258A5C", "#46B37A", "#8ADBAE", "#D5F5E2"]
+      },
+      "signal-green-night": {
+        "role": "secondary",
+        "displayName": "Signal Green Night",
+        "canonical": "#6FE3A1",
+        "tonalRamp": ["#0B3E28", "#0F5132", "#176B45", "#258A5C", "#46B37A", "#6FE3A1", "#A9F2C8", "#D5F5E2"]
+      },
+      "concrete": {
+        "role": "tertiary",
+        "displayName": "Concrete",
+        "canonical": "#5A656B",
+        "tonalRamp": ["#1E2427", "#2B3236", "#3E4C52", "#4B5B62", "#5A656B", "#8A9499", "#B9C0C3", "#E6E1D6"]
+      },
+      "alert-red": {
+        "role": "neutral",
+        "displayName": "Alert Red",
+        "canonical": "#B3261E",
+        "tonalRamp": ["#410E0B", "#690005", "#93000A", "#B3261E", "#D94B43", "#F08A82", "#F9DEDC", "#FFDAD6"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Floor Display", "purpose": "Only for the floor/room readout; Roboto Black with tabular figures." },
+      "headline": { "displayName": "Headline", "purpose": "Page and section titles." },
+      "title": { "displayName": "Title", "purpose": "Card locations, form title, primary button labels." },
+      "body": { "displayName": "Body", "purpose": "Ledger values and notes." },
+      "label": { "displayName": "Label", "purpose": "Field names, stamps, chips, timestamps." }
+    },
+    "shadows": [
+      { "name": "fab-rest", "value": "0 4px 12px rgba(0,0,0,0.18)", "purpose": "The single floating action; Material default FAB shadow." }
+    ],
+    "motion": [
+      { "name": "enter", "value": "220ms cubic-bezier(0.4, 0.0, 0.2, 1)", "purpose": "List to detail slide + fade." },
+      { "name": "exit", "value": "120ms cubic-bezier(0.4, 0.0, 0.2, 1)", "purpose": "Pop and dismiss transitions." },
+      { "name": "stamp", "value": "120ms", "purpose": "Selected stamp feedback and photo flash overlay." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "0dp" },
+      { "name": "medium", "value": "600dp" },
+      { "name": "expanded", "value": "840dp" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Status Stamp",
+      "kind": "chip",
+      "refersTo": "status-stamp",
+      "description": "Compact verdict plate at the start of every record card.",
+      "html": "<span class=\"ds-stamp\">✓ 免爬</span>",
+      "css": ".ds-stamp { display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border:1.5px solid rgba(31,107,69,.45); border-radius:6px; background:#D5F5E2; color:#06402A; font:600 12px/16px Roboto, sans-serif; letter-spacing:.3px; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "primary-button",
+      "description": "Fixed bottom save action in the record form.",
+      "html": "<button class=\"ds-primary\">保存记录</button>",
+      "css": ".ds-primary { width:100%; height:52px; border:0; border-radius:12px; background:#FFC83D; color:#121517; font:700 16px/20px Roboto, sans-serif; cursor:pointer; } .ds-primary:focus-visible { outline:2px solid #6A4B00; outline-offset:2px; } .ds-primary:active { filter:brightness(.94); }"
+    },
+    {
+      "name": "Record Card",
+      "kind": "card",
+      "refersTo": "record-card",
+      "description": "A waybill-like card: stamp, location, floor/room, facts, time.",
+      "html": "<article class=\"ds-record\"><span class=\"ds-stamp\">要爬</span><div><h3>江景苑 2 栋</h3><p>#D5566 · 尾号 2145 · 男</p><strong>21F · 2103</strong><p>门完好 · 上面能开</p><small>11月1日 20:57</small></div></article>",
+      "css": ".ds-record { display:flex; gap:12px; padding:16px; border:1px solid rgba(203,198,185,.65); border-radius:16px; background:#FBF9F4; color:#121517; } .ds-record h3 { margin:0; font:600 20px/26px Roboto, sans-serif; } .ds-record p { margin:3px 0 0; color:#4E514F; font:400 12px/18px Roboto, sans-serif; } .ds-record strong { display:block; margin:14px 0 2px; font:900 30px/34px Roboto, sans-serif; font-feature-settings:'tnum'; } .ds-record small { display:block; margin-top:12px; color:#4E514F; font:500 11px/14px Roboto, sans-serif; }"
+    },
+    {
+      "name": "Climb Decision",
+      "kind": "custom",
+      "description": "Three equal choices at the top of the form; the choice drives the record's status stamp.",
+      "html": "<div class=\"ds-decision\"><button class=\"ds-choice is-selected\">不用爬楼<small>省一趟</small></button><button class=\"ds-choice\">要爬楼<small>带好门禁</small></button><button class=\"ds-choice\">待确认<small>下次再看</small></button></div>",
+      "css": ".ds-decision { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; } .ds-choice { min-height:74px; border:1px solid #CBC6B9; border-radius:12px; background:#FBF9F4; color:#121517; font:600 14px/20px Roboto, sans-serif; } .ds-choice small { display:block; margin-top:2px; color:#4E514F; font:500 11px/14px Roboto, sans-serif; } .ds-choice.is-selected { background:#D5F5E2; border:2px solid #1F6B45; color:#06402A; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Selection chip for list filters and form tri-state choices; amber means selected, not success.",
+      "html": "<button class=\"ds-chip is-selected\">全部</button>",
+      "css": ".ds-chip { min-height:40px; padding:8px 14px; border:1px solid #CBC6B9; border-radius:8px; background:#FBF9F4; color:#17191C; font:600 12px/16px Roboto, sans-serif; } .ds-chip.is-selected { background:#FFC83D; color:#241A00; border-color:#FFC83D; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "楼道台账",
+    "overview": "楼记不是一张通用笔记卡片，而是一本骑手随身携带的楼道台账：一枚印章先告诉你「免爬 / 要爬」，一个巨大的楼层房号告诉你爬到哪，剩下的字段像运单一样一行行排好。Material 3 提供结构与交互，视觉取自骑手每天真正接触的东西——运单、楼层牌、手写记录和门口的安全标记。整体气质是实用、直接、有一点工业感。",
+    "keyCharacteristics": [
+      "一枚状态印章先于一切文字被看到。",
+      "巨型楼层/房号数字，tabular numerals。",
+      "台账横线、方正卡片、6dp 印章圆角。",
+      "一个页面只有一个主行动。",
+      "深浅色、1.3× 字体、横屏和平板宽度都要成立。"
+    ],
+    "rules": [
+      { "name": "The One Action Rule", "body": "每屏最多一个高饱和琥珀行动；其余行动使用文字按钮或描边按钮。", "section": "colors" },
+      { "name": "The Status Is Spoken Rule", "body": "状态永远同时有文字和图形/颜色；不允许只靠颜色表达「免爬 / 要爬 / 门有问题」。", "section": "colors" },
+      { "name": "The Floor-First Rule", "body": "楼层/房号永远是页面上最大的数字。", "section": "typography" },
+      { "name": "The One Surface Rule", "body": "卡片只声明一种边界：1dp 描边或表面色差，不同时叠加大阴影。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 让状态印章成为列表卡片第一眼看到的东西。",
+      "Do 用 48dp 以上的触摸目标和至少 8dp 的间隔。",
+      "Do 同时提供浅色和深色方案，并在 1.3× 字体下检查换行和遮挡。",
+      "Do 在横屏/平板上把内容限制在 760dp 内并居中；FAB 跟随内容列。",
+      "Do 用文字 + 图标 + 颜色共同表达状态。"
+    ],
+    "donts": [
+      "Don't 用纯色块或颜色单独表示「免爬 / 门有问题」。",
+      "Don't 在卡片上同时使用宽阴影和 1dp 描边。",
+      "Don't 把「未填」做成 48sp 的巨型标题。",
+      "Don't 在表单里加入第二个悬浮主按钮。",
+      "Don't 使用渐变文字、玻璃拟态、装饰性光晕或渐变背景。",
+      "Don't 用 emoji 代替图标。"
+    ]
+  }
+}

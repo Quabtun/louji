@@ -1,0 +1,39 @@
+# Gradle / Android
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material — never commit
+keystore.properties
+keystore/
+*.jks
+*.keystore
+
+# Tool state
+.mimosa/
+.video_agent/
+.impeccable/review/
+.impeccable/build/
+node_modules/
+tools/icon/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local test artifacts
+docs/test-report/screens/*.png
+!docs/test-report/screens/.gitkeep
+/dist/
+/.emulator.log
+/.ui.xml
+/.*.png
+
+# ZCode session state
+.zcode/

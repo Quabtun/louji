@@ -1,0 +1,12 @@
+{
+  "name": "louji-icon-pipeline",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Rasterizes the LouJi master SVG into Android launcher icon densities.",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
+  }
+}
