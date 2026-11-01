@@ -70,13 +70,13 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun install() {
-        val ready = _state.value as? UpdateUiState.Ready ?: return
+        val target = installTarget(_state.value) ?: return
         if (!container.updater.canInstallPackages()) {
-            _state.value = UpdateUiState.NeedsPermission(ready.info, ready.file)
+            _state.value = UpdateUiState.NeedsPermission(target.first, target.second)
             return
         }
         try {
-            container.updater.install(ready.file)
+            container.updater.install(target.second)
         } catch (error: Throwable) {
             _state.value = UpdateUiState.Error(
                 message = error.message ?: "无法打开安装器",
@@ -134,4 +134,11 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     private companion object {
         const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
     }
+}
+
+/** The retry button lives in NeedsPermission, so both states must resolve to an install target. */
+internal fun installTarget(state: UpdateUiState): Pair<UpdateInfo, File>? = when (state) {
+    is UpdateUiState.Ready -> state.info to state.file
+    is UpdateUiState.NeedsPermission -> state.info to state.file
+    else -> null
 }
