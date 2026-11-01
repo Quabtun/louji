@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.0.3
+版本：1.0.4
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,14 +9,14 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 17 / 17 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| JVM 单元测试 | 19 / 19 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 12 / 12 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-01T20-54-01.461Z-dd8d97b7a711` |
-| Release APK | 已签名，3.8 MB | `apksigner verify` 通过 |
-| 应用内更新 E2E | 待 v1.0.1 发布后补充 | 见第 6 节 |
+| Release APK | 已签名，3.8 MB（v1.0.4，versionCode 5） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4） | 见第 6 节、`docs/screenshots/update-*.png` |
 
-## 2. 单元测试（17）
+## 2. 单元测试（19）
 
 命令：
 
@@ -30,8 +30,9 @@
 - `RecordValidatorTest`：位置必填、4 位尾号、媒体上限、完整表单通过、默认值不算有效内容。
 - `FormattersTest`：楼层显示（7 → 7F、B1）、空值占位、时长、摘要包含全部关键字段。
 - `BackupJsonTest`：`BackupRecord` / `BackupManifest` 序列化往返、缺省字段兼容。
+- `InstallTargetTest`：Ready 与 NeedsPermission 都能解析出安装目标，其他状态返回 null（权限重试回归测试）。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 17 / 17 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 19 / 19 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
 ## 3. 仪器化测试（12，API 35 模拟器）
 
@@ -112,18 +113,31 @@
 | 横屏/大字体下 FAB 遮挡卡片文字 | 改为图标 FAB；印章移到卡片左侧；时间移到左侧；FAB 锚定内容列 |
 | 列表「上面不能开」详情用红色，像错误 | 改为琥珀色事实提示；只有门损坏/删除用红色 |
 | 设置里清除记录/隐私误用门图标 | 换成垃圾桶 / 信息 / 链接 vector |
+| 最终 finish review：列表门有问题不够醒目 | 列表门有问题使用错误色；v1.0.4 截图已验证浅色/深色 |
+| 最终 finish review：FAB 超出卡片边距 | FAB 改为与内容列 20dp 边距对齐 |
+| 最终 finish review：详情滚动后丢失记录身份 | app bar 标题改为当前位置名，滚动后仍可识别 |
+| 最终 finish review：设置「存储占用」与记录数矛盾 | 改为「媒体占用」，明确只统计照片/视频 |
+| 最终 finish review：客户标签占用信号绿 | 标签改为中性表面色；绿色只保留给免爬/会下来 |
+| 最终 finish review：更新说明像开发者日志 | v1.0.3/v1.0.4 Release notes 改写为骑手可读语言 |
+| 最终 finish review：按钮圆角/图标方向不一致 | 更新弹层、详情次要按钮统一 12dp；导出/导入图标区分 |
 
 ## 6. 应用内更新 E2E
 
-（v1.0.1 发布后补充：安装 v1.0.0 → 设置检查更新 → 发现 v1.0.1 → 下载 → 校验 → 系统安装器 → 覆盖安装成功。附截图与版本信息。）
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4 再次走完整链路，最终版本 **v1.0.4（versionCode 5）**。
+
+- 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
+- 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
+- 证据：`docs/screenshots/update-available.png`、`update-ready.png`、`update-installed.png`。
+- 安装器与数据：覆盖安装使用同一签名（SHA-256 `48d7799e…`），安装后仍在列表看到 v1.0.0 创建的记录。
 
 ## 7. 证据目录
 
 - `docs/screenshots/home-light.png` / `home-dark.png` / `home-font13.png` / `home-landscape.png`
-- `docs/screenshots/form-edit.png`
+- `docs/screenshots/form-edit.png` / `form-dark.png` / `form-font13.png` / `form-landscape.png`
 - `docs/screenshots/detail.png` / `detail-dark.png` / `detail-media.png`
 - `docs/screenshots/settings.png` / `settings-dark.png`
 - `docs/screenshots/viewer-photo.png` / `viewer-video.png`
+- `docs/screenshots/update-available.png` / `update-ready.png` / `update-installed.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
@@ -134,5 +148,6 @@
 
 - 首版无云同步、账号、应用锁、Play 商店上架。
 - 相机预览在软件 GPU 的 `screencap` 中为黑屏，但文件与播放正常。
-- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 使用本地签名发布。
+- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 使用本地签名发布。
+- 当前 GitHub 账号 Actions 因计费被锁定，CI 工作流已在仓库中禁用；本地测试、Lint、Mimosa 与发布已全部完成。
 - 签名密钥丢失后无法覆盖安装新版本；README 已标注备份要求。

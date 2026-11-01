@@ -30,7 +30,7 @@
 | --- | --- |
 | ![详情媒体](docs/screenshots/detail-media.png) | ![设置](docs/screenshots/settings.png) |
 
-更多：深色详情、1.3× 字体、横屏、照片/视频查看器见 [`docs/screenshots`](docs/screenshots)。
+更多：深色详情、1.3× 字体、横屏、照片/视频查看器、更新弹层见 [`docs/screenshots`](docs/screenshots)。
 
 ## 安装
 
@@ -93,7 +93,7 @@ New-Item -ItemType Junction -Path D:\louji-build -Target 'D:\code\Zcode\爬楼�
 ./gradlew :app:lintDebug
 ```
 
-最近一次结果：17 个 JVM 单元测试通过；12 个仪器化测试通过（API 35，1080×2400）；Lint 0 error；Mimosa 安全扫描 0 个发现。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
+最近一次结果：19 个 JVM 单元测试通过；12 个仪器化测试通过（API 35，1080×2400）；Lint 0 error；Mimosa 安全扫描 0 个发现。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
 
 ## 发布更新
 
@@ -116,7 +116,7 @@ New-Item -ItemType Junction -Path D:\louji-build -Target 'D:\code\Zcode\爬楼�
 
 ### GitHub Actions
 
-- `.github/workflows/ci.yml`：push / PR 时跑单元测试、Lint、Debug 构建。
+- `.github/workflows/ci.yml`：push / PR 时跑单元测试、Lint、Debug 构建。当前 GitHub 账号的 Actions 因计费被锁定，工作流已在仓库中暂时禁用；本地测试与发布不受影响，解除后可在 Actions 页重新启用。
 - `.github/workflows/release.yml`：手动触发（workflow_dispatch），使用以下 Secrets 签名并发版：
   - `SIGNING_KEYSTORE_BASE64`（`base64 -w0 keystore/louji-release.jks`）
   - `SIGNING_STORE_PASSWORD`

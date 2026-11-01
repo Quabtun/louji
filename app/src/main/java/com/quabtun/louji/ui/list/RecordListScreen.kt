@@ -170,7 +170,10 @@ fun RecordListScreen(
                             },
                             action = {
                                 if (query.isBlank() && filter == RecordFilter.ALL) {
-                                    FilledTonalButton(onClick = onCreate) {
+                                    FilledTonalButton(
+                                        onClick = onCreate,
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
                                         Text("记下第一单")
                                     }
                                 } else {
@@ -193,7 +196,7 @@ fun RecordListScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 4.dp, bottom = 20.dp)
+                        .padding(end = 20.dp, bottom = 20.dp)
                         .testTag("create_record"),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "记一单")

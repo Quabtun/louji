@@ -105,7 +105,14 @@ fun RecordDetailScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("记录", style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Text(
+                        text = record?.record?.location ?: "记录",
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("detail_back")) {
                         Icon(
@@ -323,8 +330,8 @@ fun RecordDetailScreen(
                                 ) {
                                     item.record.personalityTags.forEach { tag ->
                                         Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                             shape = RoundedCornerShape(8.dp),
                                         ) {
                                             Text(
@@ -383,12 +390,14 @@ fun RecordDetailScreen(
                             OutlinedButton(
                                 onClick = { onEdit(item.record.id) },
                                 modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
                             ) {
                                 Text("编辑记录")
                             }
                             OutlinedButton(
                                 onClick = { onDuplicate(item.record.id) },
                                 modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
                             ) {
                                 Text("再来一单")
                             }

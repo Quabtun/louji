@@ -170,7 +170,7 @@ fun SettingsScreen(
                 SettingsRow(
                     title = "导出备份",
                     subtitle = "打包记录和全部附件为 zip，包含客户信息，请妥善保管",
-                    icon = R.drawable.ic_backup,
+                    icon = R.drawable.ic_export,
                     onClick = {
                         exportLauncher.launch(backupFileName())
                     },
@@ -184,7 +184,7 @@ fun SettingsScreen(
                     },
                 )
                 SettingsRow(
-                    title = "存储占用",
+                    title = "媒体占用",
                     subtitle = storage?.let {
                         "${formatBytes(it.totalBytes)} · ${it.itemCount} 个文件"
                     } ?: "正在计算…",
