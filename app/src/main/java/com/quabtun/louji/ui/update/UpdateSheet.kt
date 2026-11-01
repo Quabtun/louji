@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -91,7 +92,8 @@ fun UpdateSheet(
                     .verticalScroll(rememberScrollState()),
             ) {
                 Text(
-                    text = info.notes.ifBlank { "这次更新包含体验改进和问题修复。" },
+                    text = formatReleaseNotes(info.notes)
+                        .ifBlank { "这次更新包含体验改进和问题修复。" },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -104,6 +106,10 @@ fun UpdateSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                     ) {
                         Text("下载更新", fontWeight = FontWeight.Bold)
                     }
@@ -146,6 +152,10 @@ fun UpdateSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                     ) {
                         Icon(Icons.Filled.Check, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
@@ -165,6 +175,10 @@ fun UpdateSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                     ) {
                         Text("去系统设置")
                     }
@@ -181,3 +195,19 @@ fun UpdateSheet(
         }
     }
 }
+
+
+private fun formatReleaseNotes(raw: String): String = raw
+    .lines()
+    .joinToString("\n") { line ->
+        val trimmed = line.trimStart()
+        when {
+            trimmed.startsWith("### ") -> trimmed.removePrefix("### ")
+            trimmed.startsWith("## ") -> trimmed.removePrefix("## ")
+            trimmed.startsWith("# ") -> trimmed.removePrefix("# ")
+            trimmed.startsWith("- ") -> "• " + trimmed.removePrefix("- ")
+            trimmed == "---" -> ""
+            else -> line
+        }
+    }
+    .trim()
