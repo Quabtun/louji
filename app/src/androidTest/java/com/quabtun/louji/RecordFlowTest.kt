@@ -45,7 +45,7 @@ class RecordFlowTest {
     fun createRecordAndInspectAllFields() {
         createRecord()
 
-        compose.onAllNodesWithText("阳光花园 3 栋").assertCountEquals(2)
+        compose.onAllNodesWithText("阳光花园 3 栋").assertCountEquals(3)
         compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
         compose.onNodeWithText("门是否完好").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("上面能开门").performScrollTo().assertIsDisplayed()
@@ -106,7 +106,7 @@ class RecordFlowTest {
         Espresso.closeSoftKeyboard()
         compose.onNodeWithTag("save_record").performClick()
         waitForDetail()
-        compose.onAllNodesWithText("新地址 9 栋").assertCountEquals(2)
+        compose.onAllNodesWithText("新地址 9 栋").assertCountEquals(3)
         compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
     }
 
