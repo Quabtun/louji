@@ -2,7 +2,7 @@
 
 给配送骑手用的私人爬楼台账。记录一单要不要爬楼、楼层房号、门和客户习惯，支持截图、拍照、录像，数据只存本机，更新从 GitHub Releases 下载。
 
-> 截图中的记录均为合成的演示数据，不包含真实客户信息。
+> 截图为 v1.0.4 构建；记录均为合成的演示数据，不包含真实客户信息。
 
 ## 功能
 
@@ -93,7 +93,7 @@ New-Item -ItemType Junction -Path D:\louji-build -Target 'D:\code\Zcode\爬楼�
 ./gradlew :app:lintDebug
 ```
 
-最近一次结果：19 个 JVM 单元测试通过；12 个仪器化测试通过（API 35，1080×2400）；Lint 0 error；Mimosa 安全扫描 0 个发现。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
+最近一次结果：19 个 JVM 单元测试通过；12 个仪器化测试通过（API 35，1080×2400）；Lint 0 error；Mimosa 静态深度扫描 0 个发现（证据边界见报告）。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)。
 
 ## 发布更新
 

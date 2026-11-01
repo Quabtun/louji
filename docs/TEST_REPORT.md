@@ -97,7 +97,8 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果：`findingCount: 0`，`packagesScanned: 63`，seal `sha256:a56e23ee0f59f803ceb0bb03e1746611889e3424abef3f4d34780f793d6c199d`。
+- 结果：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-01T23-10-28.027Z-d1749a4ba7fe`，seal `sha256:294ec8debd9c950a80a09311e7abfcea7adce713acce472d57f8e1a2aec76328`。
+- 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
 ### 视觉与交互缺陷（已修）
@@ -120,6 +121,15 @@
 | 最终 finish review：客户标签占用信号绿 | 标签改为中性表面色；绿色只保留给免爬/会下来 |
 | 最终 finish review：更新说明像开发者日志 | v1.0.3/v1.0.4 Release notes 改写为骑手可读语言 |
 | 最终 finish review：按钮圆角/图标方向不一致 | 更新弹层、详情次要按钮统一 12dp；导出/导入图标区分 |
+
+### 设计 finish review
+
+- 以全新上下文审阅 15 张最终截图、DESIGN.md、PRODUCT.md 与 surface brief；结论为 **fix**，无 P0。
+- P1：更新说明是开发者语气 → v1.0.3 / v1.0.4 Release notes 改为骑手语言。
+- P2：门有问题不够醒目、FAB 超出内容边距、详情滚动后丢失身份、设置存储读数与记录矛盾 → v1.0.4 已修并重拍。
+- P3：客户标签占用信号绿、按钮圆角不一致、导入/导出图标同向 → v1.0.4 已修。
+- 重拍后未发现新的 P0/P1；保留的 P3 为横屏顶部 app bar 仍按窗口全宽排布（Material 标准行为）。
+- `impeccable detect` 对 native 源码返回空数组（该检测器只读 HTML/CSS）；实际门禁为模拟器截图验收 + native audit 清单。
 
 ## 6. 应用内更新 E2E
 
