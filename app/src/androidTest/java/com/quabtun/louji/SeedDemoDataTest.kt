@@ -35,6 +35,7 @@ class SeedDemoDataTest {
         runBlocking {
             repository.clearAll()
             mediaStore.sweepOrphans(emptySet())
+            val orderShot = createOrderScreenshot(mediaStore)
             val photo = createDemoPhoto(mediaStore)
 
             repository.save(
@@ -54,7 +55,7 @@ class SeedDemoDataTest {
                     remark = "门禁在左手边，电梯到 7 楼。",
                 ),
                 recordId = null,
-                pendingMedia = listOf(photo),
+                pendingMedia = listOf(orderShot, photo),
             )
             repository.save(
                 draft = RecordDraft(
@@ -114,6 +115,66 @@ class SeedDemoDataTest {
                 pendingMedia = emptyList(),
             )
         }
+    }
+
+    private suspend fun createOrderScreenshot(
+        mediaStore: com.quabtun.louji.data.LocalMediaStore,
+    ): MediaDraft {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val bitmap = Bitmap.createBitmap(720, 1280, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(244, 241, 234))
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.color = Color.rgb(18, 21, 23)
+        paint.textSize = 42f
+        paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        canvas.drawText("订单详情", 56f, 104f, paint)
+        paint.textSize = 24f
+        paint.color = Color.rgb(31, 107, 69)
+        canvas.drawText("已完成 · 外卖", 56f, 148f, paint)
+        paint.color = Color.rgb(203, 198, 185)
+        paint.strokeWidth = 2f
+        canvas.drawLine(56f, 186f, 664f, 186f, paint)
+        val rows = listOf(
+            "订单号" to "A12345",
+            "收货地址" to "阳光花园 3 栋",
+            "楼层 / 房号" to "7F · 2-301",
+            "客户" to "王女士 · 尾号 4821",
+            "送达要求" to "放门口，电话联系",
+        )
+        var y = 270f
+        rows.forEach { (label, value) ->
+            paint.typeface = android.graphics.Typeface.DEFAULT
+            paint.textSize = 24f
+            paint.color = Color.rgb(90, 101, 107)
+            canvas.drawText(label, 56f, y, paint)
+            paint.textSize = 32f
+            paint.color = Color.rgb(18, 21, 23)
+            canvas.drawText(value, 220f, y, paint)
+            paint.color = Color.rgb(222, 218, 208)
+            paint.strokeWidth = 1.5f
+            canvas.drawLine(56f, y + 34f, 664f, y + 34f, paint)
+            y += 110f
+        }
+        paint.color = Color.rgb(255, 200, 61)
+        canvas.drawRect(56f, 900f, 260f, 1000f, paint)
+        paint.color = Color.rgb(18, 21, 23)
+        paint.textSize = 26f
+        paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        canvas.drawText("要爬楼", 92f, 960f, paint)
+        paint.typeface = android.graphics.Typeface.DEFAULT
+        paint.textSize = 22f
+        paint.color = Color.rgb(90, 101, 107)
+        canvas.drawText("楼记演示订单截图 · 非真实客户", 56f, 1190f, paint)
+
+        val file = File(context.cacheDir, "demo-order-${System.currentTimeMillis()}.png")
+        FileOutputStream(file).use { output ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        }
+        bitmap.recycle()
+        val draft = mediaStore.importFromUri(Uri.fromFile(file))
+        file.delete()
+        return draft
     }
 
     private suspend fun createDemoPhoto(mediaStore: com.quabtun.louji.data.LocalMediaStore): MediaDraft {

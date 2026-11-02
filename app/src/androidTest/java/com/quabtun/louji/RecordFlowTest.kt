@@ -1,5 +1,7 @@
 package com.quabtun.louji
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -15,6 +17,10 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.quabtun.louji.model.MediaDraft
+import com.quabtun.louji.model.MediaType
+import com.quabtun.louji.model.RecordDraft
+import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -108,6 +114,50 @@ class RecordFlowTest {
         compose.onNodeWithTag("media_details").performClick()
         waitForDetail()
         compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
+    }
+
+    @Test
+    fun orderThumbnailOpensAndClosesZoom() {
+        val app = ApplicationProvider.getApplicationContext<LouJiApp>()
+        val shot = File(app.container.mediaStore.mediaDirectory(), "order-shot-test.png")
+        val bitmap = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.rgb(255, 200, 61))
+        shot.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val recordId = runBlocking {
+            app.container.repository.save(
+                RecordDraft(
+                    location = "截图测试 1 栋",
+                    orderNo = "S001",
+                    floor = "9",
+                    roomNo = "901",
+                ),
+                null,
+                listOf(
+                    MediaDraft(
+                        type = MediaType.IMAGE,
+                        filePath = shot.absolutePath,
+                        thumbPath = null,
+                        mimeType = "image/png",
+                        sizeBytes = shot.length(),
+                        durationMs = 0L,
+                    ),
+                ),
+            )
+        }
+
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithTag("order_thumb_$recordId").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("order_thumb_$recordId").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("order_zoom").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onAllNodesWithTag("record_media").assertCountEquals(0)
+        compose.onNodeWithTag("order_zoom_image").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("order_zoom").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("order_thumb_$recordId").assertIsDisplayed()
     }
 
     @Test

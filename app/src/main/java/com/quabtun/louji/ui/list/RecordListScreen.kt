@@ -1,8 +1,15 @@
 package com.quabtun.louji.ui.list
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +19,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -26,13 +35,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,22 +55,36 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.quabtun.louji.R
 import com.quabtun.louji.data.db.RecordWithAttachments
+import com.quabtun.louji.model.MediaType
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordStats
 import com.quabtun.louji.model.TriState
@@ -74,6 +98,7 @@ import com.quabtun.louji.util.doorLabel
 import com.quabtun.louji.util.formatDateTime
 import com.quabtun.louji.util.placeDisplay
 import com.quabtun.louji.util.recordSearchSubtitle
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -90,7 +115,9 @@ fun RecordListScreen(
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    var zoomedImage by remember { mutableStateOf<String?>(null) }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.semantics { testTagsAsResourceId = true },
         containerColor = MaterialTheme.colorScheme.background,
@@ -205,6 +232,7 @@ fun RecordListScreen(
                             record = record,
                             onClick = { onOpenMedia(record.record.id) },
                             onOpenDetail = { onOpenDetail(record.record.id) },
+                            onOpenThumbnail = { zoomedImage = it },
                         )
                     }
                 }
@@ -222,6 +250,10 @@ fun RecordListScreen(
                 }
             }
         }
+    }
+    zoomedImage?.let { path ->
+        OrderScreenshotOverlay(path = path, onDismiss = { zoomedImage = null })
+    }
     }
 }
 
@@ -333,9 +365,11 @@ private fun RecordCard(
     record: RecordWithAttachments,
     onClick: () -> Unit,
     onOpenDetail: () -> Unit,
+    onOpenThumbnail: (String) -> Unit,
 ) {
     val item = record.record
     val status = LocalLouJiStatusColors.current
+    val orderShot = remember(record.attachments) { record.orderScreenshotPath() }
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -363,6 +397,14 @@ private fun RecordCard(
                             fontFeatureSettings = TabularNumbers.fontFeatureSettings,
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (orderShot != null) {
+                    Spacer(Modifier.width(10.dp))
+                    OrderScreenshotThumbnail(
+                        model = orderShot,
+                        recordId = item.id,
+                        onClick = { onOpenThumbnail(orderShot) },
                     )
                 }
             }
@@ -479,4 +521,121 @@ private fun RecordCard(
             }
         }
     }
+}
+
+private fun RecordWithAttachments.orderScreenshotPath(): String? {
+    val image = attachments.firstOrNull { it.type == MediaType.IMAGE } ?: return null
+    return image.thumbPath?.takeIf { File(it).isFile }
+        ?: image.filePath.takeIf { File(it).isFile }
+}
+
+@Composable
+private fun OrderScreenshotThumbnail(
+    model: String,
+    recordId: Long,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    Box(
+        modifier = Modifier
+            .size(width = 64.dp, height = 84.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                shape = RoundedCornerShape(10.dp),
+            )
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "订单截屏缩略图，点击放大" }
+            .testTag("order_thumb_$recordId"),
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(File(model))
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+@Composable
+private fun OrderScreenshotOverlay(path: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    BackHandler(onBack = onDismiss)
+    DisposableEffect(view) {
+        val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        val previousStatusBars = controller?.isAppearanceLightStatusBars
+        val previousNavigationBars = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = false
+        controller?.isAppearanceLightNavigationBars = false
+        onDispose {
+            if (previousStatusBars != null) {
+                controller.isAppearanceLightStatusBars = previousStatusBars
+            }
+            if (previousNavigationBars != null) {
+                controller.isAppearanceLightNavigationBars = previousNavigationBars
+            }
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            )
+            .testTag("order_zoom"),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(File(path))
+                .crossfade(true)
+                .build(),
+            contentDescription = "订单截屏大图，点击关闭",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 56.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                )
+                .testTag("order_zoom_image"),
+        )
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(12.dp)
+                .testTag("order_zoom_close"),
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = "关闭大图", tint = Color.White)
+        }
+        Text(
+            text = "点图片关闭",
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 28.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.72f),
+        )
+    }
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

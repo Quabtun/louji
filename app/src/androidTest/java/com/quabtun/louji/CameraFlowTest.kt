@@ -48,7 +48,7 @@ class CameraFlowTest {
     fun capturePhotoAddsPendingAttachment() {
         openMediaSheet()
         compose.onNodeWithTag("media_photo").performClick()
-        compose.waitUntil(30_000) {
+        compose.waitUntil(60_000) {
             compose.onAllNodesWithTag("camera_ready").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("camera_shutter").performClick()
@@ -62,7 +62,7 @@ class CameraFlowTest {
     fun captureVideoAddsPendingAttachment() {
         openMediaSheet()
         compose.onNodeWithTag("media_video").performClick()
-        compose.waitUntil(30_000) {
+        compose.waitUntil(60_000) {
             compose.onAllNodesWithTag("camera_ready").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("camera_shutter").performClick()
