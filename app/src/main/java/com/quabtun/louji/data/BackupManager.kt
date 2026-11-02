@@ -135,6 +135,7 @@ class BackupManager(
                         orderNo = orderNo,
                         personalityNote = backup.personalityNote.take(200),
                         remark = backup.remark.take(300),
+                        climbNote = backup.climbNote.take(300),
                         personalityTags = backup.personalityTags.take(12).map { it.take(30) },
                     ),
                     createdAt = createdAt,
@@ -300,6 +301,7 @@ class BackupManager(
         personalityTags = record.personalityTags,
         personalityNote = record.personalityNote,
         remark = record.remark,
+        climbNote = record.climbNote,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt,
         attachments = files.map { file ->
@@ -331,6 +333,7 @@ class BackupManager(
         personalityTags = backup.personalityTags,
         personalityNote = backup.personalityNote,
         remark = backup.remark,
+        climbNote = backup.climbNote,
         createdAt = createdAt,
         updatedAt = backup.updatedAt.takeIf { it > 0 } ?: now,
     )

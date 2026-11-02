@@ -59,6 +59,8 @@ class RecordFlowTest {
         compose.onNodeWithText("好沟通").performScrollTo().assertExists()
         compose.onNodeWithText("Nice, calls before arriving").performScrollTo().assertExists()
         compose.onNodeWithText("门禁在左手边").performScrollTo().assertExists()
+        compose.onNodeWithText("爬楼说明").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("客户会下楼拿，电梯直达").performScrollTo().assertExists()
         compose.onAllNodesWithText("不用爬楼").assertCountEquals(2)
     }
 
@@ -68,6 +70,13 @@ class RecordFlowTest {
         backToList()
 
         compose.onNodeWithTag("search_field").performTextInput("A12345")
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("阳光花园 3 栋").assertIsDisplayed()
+
+        compose.onNodeWithTag("search_field").performTextClearance()
+        compose.onNodeWithTag("search_field").performTextInput("电梯直达")
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
         }
@@ -182,6 +191,8 @@ class RecordFlowTest {
     private fun createRecord() {
         compose.onNodeWithTag("create_record").performClick()
         compose.onNodeWithTag("decision_no_stairs").performClick()
+        compose.onNodeWithTag("field_climb_note").performTextInput("客户会下楼拿，电梯直达")
+        Espresso.closeSoftKeyboard()
         compose.onNodeWithTag("field_location").performScrollTo().performTextInput("阳光花园 3 栋")
         compose.onNodeWithTag("field_order").performScrollTo().performTextInput("A12345")
         compose.onNodeWithTag("field_tail").performScrollTo().performTextInput("4821")

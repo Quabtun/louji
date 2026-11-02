@@ -66,10 +66,17 @@ class RecordDaoTest {
                 noStairs = TriState.YES,
                 willComeDown = TriState.YES,
                 remark = "门禁在左手边",
+                climbNote = "客户会下楼拿",
             ),
         )
         val stairs = recordDao.insert(
-            record("老小区", "B999", noStairs = TriState.NO, willComeDown = TriState.NO),
+            record(
+                "老小区",
+                "B999",
+                noStairs = TriState.NO,
+                willComeDown = TriState.NO,
+                climbNote = "电梯坏了",
+            ),
         )
         attachmentDao.insertAll(listOf(attachment(noStairs, "photo.jpg")))
 
@@ -78,6 +85,8 @@ class RecordDaoTest {
         assertEquals(1, recordDao.observeFiltered("老小区", "ALL").first().size)
         assertEquals(2, recordDao.observeFiltered("4821", "ALL").first().size)
         assertEquals(1, recordDao.observeFiltered("门禁", "ALL").first().size)
+        assertEquals(1, recordDao.observeFiltered("下楼拿", "ALL").first().size)
+        assertEquals(1, recordDao.observeFiltered("电梯坏了", "ALL").first().size)
         assertEquals(1, recordDao.observeFiltered("", "NO_STAIRS").first().size)
         assertEquals(
             "老小区",
@@ -112,6 +121,7 @@ class RecordDaoTest {
         noStairs: TriState = TriState.UNKNOWN,
         willComeDown: TriState = TriState.UNKNOWN,
         remark: String = "",
+        climbNote: String = "",
     ) = RecordEntity(
         location = location,
         orderNo = orderNo,
@@ -126,6 +136,7 @@ class RecordDaoTest {
         personalityTags = listOf("好沟通"),
         personalityNote = "",
         remark = remark,
+        climbNote = climbNote,
         createdAt = System.currentTimeMillis(),
         updatedAt = System.currentTimeMillis(),
     )

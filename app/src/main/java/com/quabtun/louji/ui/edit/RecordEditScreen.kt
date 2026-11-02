@@ -273,6 +273,20 @@ fun RecordEditScreen(
                         selected = ui.draft.noStairs,
                         onSelect = viewModel::setNoStairs,
                     )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = ui.draft.climbNote,
+                        onValueChange = viewModel::setClimbNote,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("field_climb_note"),
+                        label = { Text(climbNoteLabel(ui.draft.noStairs)) },
+                        placeholder = { Text(climbNotePlaceholder(ui.draft.noStairs)) },
+                        supportingText = { Text("选填 · ${ui.draft.climbNote.length}/300") },
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(12.dp),
+                    )
                     Spacer(Modifier.height(20.dp))
                     SectionHeader("订单")
                     Spacer(Modifier.height(14.dp))
@@ -680,6 +694,18 @@ private fun AddMediaTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+private fun climbNoteLabel(noStairs: TriState): String = when (noStairs) {
+    TriState.YES -> "为什么不用爬楼"
+    TriState.NO -> "为什么要爬楼"
+    TriState.UNKNOWN -> "爬楼情况说明"
+}
+
+private fun climbNotePlaceholder(noStairs: TriState): String = when (noStairs) {
+    TriState.YES -> "例如：客户会下楼拿、电梯直达、放快递柜…"
+    TriState.NO -> "例如：电梯坏了、客户要求送上门、没有电梯…"
+    TriState.UNKNOWN -> "例如：还没问到会不会下楼…"
 }
 
 @Composable

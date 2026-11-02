@@ -83,6 +83,7 @@ class BackupManagerTest {
                 noStairs = com.quabtun.louji.model.TriState.YES,
                 personalityTags = listOf("好沟通"),
                 remark = "门禁在左手边",
+                climbNote = "客户会下楼拿",
             ),
             recordId = null,
             pendingMedia = listOf(
@@ -112,6 +113,7 @@ class BackupManagerTest {
         assertEquals("A1", imported.record.orderNo)
         assertEquals("好沟通", imported.record.personalityTags.single())
         assertEquals("门禁在左手边", imported.record.remark)
+        assertEquals("客户会下楼拿", imported.record.climbNote)
         assertEquals(1, imported.attachments.size)
         assertTrue(File(imported.attachments.single().filePath).isFile)
 

@@ -26,6 +26,7 @@ class BackupJsonTest {
             personalityTags = listOf("好沟通", "爽快"),
             personalityNote = "打电话会接",
             remark = "门禁在左手边",
+            climbNote = "客户会下楼拿",
             createdAt = 1_700_000_000_000L,
             updatedAt = 1_700_000_100_000L,
             attachments = listOf(
@@ -48,6 +49,7 @@ class BackupJsonTest {
             """{"location":"A","createdAt":1,"updatedAt":1}""",
         )
         assertEquals("", decoded.orderNo)
+        assertEquals("", decoded.climbNote)
         assertEquals("UNKNOWN", decoded.gender)
         assertTrue(decoded.attachments.isEmpty())
     }

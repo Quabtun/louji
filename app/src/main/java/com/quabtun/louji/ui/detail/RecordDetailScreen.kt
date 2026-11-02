@@ -296,6 +296,10 @@ fun RecordDetailScreen(
                             },
                         )
                         LedgerRow(
+                            label = "爬楼说明",
+                            value = item.record.climbNote.ifBlank { "未填写" },
+                        )
+                        LedgerRow(
                             label = "会下来拿",
                             value = item.record.willComeDown.let {
                                 when (it) {

@@ -50,6 +50,7 @@ class FormattersTest {
             personalityTags = listOf("爽快"),
             personalityNote = "放门口",
             remark = "门禁在左手边",
+            climbNote = "客户会下楼拿",
             createdAt = 1L,
             updatedAt = 1L,
         )
@@ -70,6 +71,7 @@ class FormattersTest {
         assertTrue(text.contains("4821"))
         assertTrue(text.contains("7F · 301"))
         assertTrue(text.contains("不用爬楼：是"))
+        assertTrue(text.contains("爬楼说明：客户会下楼拿"))
         assertTrue(text.contains("门：完好"))
         assertTrue(text.contains("爽快"))
         assertTrue(text.contains("备注：门禁在左手边"))

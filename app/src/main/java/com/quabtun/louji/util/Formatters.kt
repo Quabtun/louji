@@ -88,6 +88,7 @@ fun RecordWithAttachments.shareText(): String {
         val place = placeDisplay(record.floor, record.roomNo)
         if (place != "未填") add("楼层/房号：$place")
         add("不用爬楼：${record.noStairs.shortYesNo()}")
+        if (record.climbNote.isNotBlank()) add("爬楼说明：${record.climbNote}")
         add("门：${record.doorIntact.doorLabel()} · 上面能开门：${record.canOpenFromAbove.canOpenLabel()}")
         add("会下来拿：${record.willComeDown.comeDownLabel()}")
         if (record.personalityTags.isNotEmpty()) add("性格：${record.personalityTags.joinToString(" / ")}")

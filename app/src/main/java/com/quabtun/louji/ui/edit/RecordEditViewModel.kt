@@ -112,6 +112,8 @@ class RecordEditViewModel(
 
     fun setRemark(value: String) = updateDraft { copy(remark = value.take(300)) }
 
+    fun setClimbNote(value: String) = updateDraft { copy(climbNote = value.take(300)) }
+
     fun toggleTag(tag: String) = updateDraft {
         val tags = if (tag in personalityTags) {
             personalityTags - tag
@@ -259,6 +261,7 @@ class RecordEditViewModel(
         personalityTags = personalityTags,
         personalityNote = personalityNote,
         remark = remark,
+        climbNote = climbNote,
     )
 
     private companion object {

@@ -451,6 +451,16 @@ private fun RecordCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (item.climbNote.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "爬楼说明：${item.climbNote}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             val doorLine = buildList {
                 if (item.doorIntact != TriState.UNKNOWN) add("门${item.doorIntact.doorLabel()}")
                 if (item.canOpenFromAbove != TriState.UNKNOWN) {

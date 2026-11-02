@@ -63,6 +63,7 @@ class RecordRepository(
                         personalityTags = draft.personalityTags.distinct(),
                         personalityNote = draft.personalityNote.trim(),
                         remark = draft.remark.trim(),
+                        climbNote = draft.climbNote.trim(),
                         createdAt = now,
                         updatedAt = now,
                     ),
@@ -83,6 +84,7 @@ class RecordRepository(
                         personalityTags = draft.personalityTags.distinct(),
                         personalityNote = draft.personalityNote.trim(),
                         remark = draft.remark.trim(),
+                        climbNote = draft.climbNote.trim(),
                         updatedAt = now,
                     ),
                 )
@@ -154,6 +156,7 @@ class RecordRepository(
             personalityTags = record.personalityTags,
             personalityNote = record.personalityNote,
             remark = record.remark,
+            climbNote = record.climbNote,
         )
     }
 

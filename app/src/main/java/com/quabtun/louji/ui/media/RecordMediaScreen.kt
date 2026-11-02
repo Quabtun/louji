@@ -259,6 +259,16 @@ private fun MediaHeader(item: RecordWithAttachments) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (record.climbNote.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "爬楼说明：${record.climbNote}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (record.remark.isNotBlank()) {
             Spacer(Modifier.height(10.dp))
             Text(

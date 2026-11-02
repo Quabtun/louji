@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.0.6
+版本：1.0.7
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -12,9 +12,9 @@
 | JVM 单元测试 | 19 / 19 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 14 / 14 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T04-15-19.138Z-802db60bff38` |
-| Release APK | 已签名，3.8 MB（v1.0.6，versionCode 7） | `apksigner verify` 通过 |
-| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4 → v1.0.5 → v1.0.6） | 见第 6 节、`docs/screenshots/update-*.png` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T05-12-57.134Z-bdf2e7cd18c2` |
+| Release APK | 已签名，3.8 MB（v1.0.7，versionCode 8） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4 → v1.0.5 → v1.0.6 → v1.0.7） | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（19）
 
@@ -27,9 +27,9 @@
 覆盖：
 
 - `AppVersionTest`：`v1.0.1` / 预发布后缀 / 位数补齐 / 数字比较 / 非法输入。
-- `RecordValidatorTest`：位置必填、4 位尾号、媒体上限、完整表单通过、默认值不算有效内容。
-- `FormattersTest`：楼层显示（7 → 7F、B1）、空值占位、时长、摘要包含全部关键字段。
-- `BackupJsonTest`：`BackupRecord` / `BackupManifest` 序列化往返、缺省字段兼容。
+- `RecordValidatorTest`：位置必填、4 位尾号、媒体上限、完整表单通过、默认值不算有效内容、只填爬楼说明也算有效内容。
+- `FormattersTest`：楼层显示（7 → 7F、B1）、空值占位、时长、摘要包含全部关键字段（含爬楼说明）。
+- `BackupJsonTest`：`BackupRecord` / `BackupManifest` 序列化往返、缺省字段兼容（含 `climbNote`）。
 - `InstallTargetTest`：Ready 与 NeedsPermission 都能解析出安装目标，其他状态返回 null（权限重试回归测试）。
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 19 / 19 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
@@ -59,6 +59,7 @@
   - 编辑位置后保存，详情更新。
   - 条目默认进入「现场」媒体页；无附件时显示空状态；顶部「详细信息」进入完整详情。
   - 独立「备注」写入、详情展示、列表单行摘要、搜索命中。
+  - 「爬楼说明」随决策填写、保存后详情展示，列表显示说明摘要，搜索「电梯直达」命中。
   - 条目右侧图片缩略图：点击打开全屏放大层，不误进「现场」；点击放大图片关闭并回到缩略图。
 - `CameraFlowTest`
   - 拍照：CameraX 绑定、快门、回调、pending 附件出现在表单。
@@ -78,6 +79,7 @@
 | 照片全屏查看 | 通过 | `docs/screenshots/viewer-photo.png` |
 | 搜索、筛选、删除 | 通过 | instrumented `RecordFlowTest` |
 | 备注写入/详情/列表/搜索 | 通过 | instrumented `RecordFlowTest`、`RecordDaoTest` |
+| 爬楼说明写入/详情/列表/搜索/备份 | 通过 | instrumented `RecordFlowTest`、`RecordDaoTest`、`BackupManagerTest` |
 | 订单截屏缩略图 → 放大 → 点图关闭 | 通过 | instrumented `RecordFlowTest`；`list-thumbnail.png`、`thumbnail-zoom.png` |
 | 点击条目 → 现场网格 → 全屏媒体 | 通过 | `docs/screenshots/detail-media.png`、`media-empty.png` |
 | 无附件现场 → 添加入口 | 通过 | `docs/screenshots/media-empty.png` |
@@ -104,7 +106,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.0.6 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T04-15-19.138Z-802db60bff38`，seal `sha256:f6f1df8b7ca20dcc9a09bbd9d40fd1abf90c674ea8f435abc3e983817b870e1c`。
+- 结果（v1.0.7 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T05-12-57.134Z-bdf2e7cd18c2`，seal `sha256:bb37916aace2a6fe7f14a37677383b5883d40de1745ffa8fe7dba7ca76bdf62d`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
@@ -146,7 +148,7 @@
 
 ## 6. 应用内更新 E2E
 
-安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6 均走完整链路，最终版本 **v1.0.6（versionCode 7）**。
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7 均走完整链路，最终版本 **v1.0.7（versionCode 8）**。
 
 - 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
 - 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
@@ -154,6 +156,7 @@
 - 安装器与数据：覆盖安装使用同一签名（SHA-256 `48d7799e…`），安装后仍在列表看到旧版本创建的记录。
 - 数据库迁移：v1.0.4 → v1.0.5 首次启动执行 Room v1→v2 迁移，新增 `remark` 列且旧记录保留；已在模拟器实测。
 - v1.0.5 → v1.0.6 无数据库结构变化，覆盖安装后原有记录与媒体正常显示。
+- v1.0.6 → v1.0.7 首次启动执行 Room v2→v3 迁移，新增 `climbNote` 列；旧记录保留，爬楼说明可正常填写/显示。
 
 ## 7. 证据目录
 
@@ -175,6 +178,6 @@
 
 - 首版无云同步、账号、应用锁、Play 商店上架。
 - 相机预览在软件 GPU 的 `screencap` 中为黑屏，但文件与播放正常。
-- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 使用本地签名发布。
+- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 使用本地签名发布。
 - 当前 GitHub 账号 Actions 因计费被锁定，CI 工作流已在仓库中禁用；本地测试、Lint、Mimosa 与发布已全部完成。
 - 签名密钥丢失后无法覆盖安装新版本；README 已标注备份要求。

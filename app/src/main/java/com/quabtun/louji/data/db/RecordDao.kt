@@ -26,6 +26,7 @@ interface RecordDao {
             OR floor LIKE '%' || :query || '%'
             OR roomNo LIKE '%' || :query || '%'
             OR remark LIKE '%' || :query || '%'
+            OR climbNote LIKE '%' || :query || '%'
             OR personalityNote LIKE '%' || :query || '%'
             OR personalityTags LIKE '%' || :query || '%'
         )

@@ -60,5 +60,6 @@ class RecordValidatorTest {
         assertTrue(RecordDraft(location = "A").hasMeaningfulContent())
         assertTrue(RecordDraft(noStairs = TriState.YES).hasMeaningfulContent())
         assertTrue(RecordDraft(remark = "门禁在左手边").hasMeaningfulContent())
+        assertTrue(RecordDraft(climbNote = "电梯坏了").hasMeaningfulContent())
     }
 }
