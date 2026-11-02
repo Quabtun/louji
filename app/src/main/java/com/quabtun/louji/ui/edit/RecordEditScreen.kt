@@ -114,7 +114,8 @@ fun RecordEditScreen(
     var showMediaSheet by remember { mutableStateOf(false) }
     var showCamera by remember { mutableStateOf(false) }
     var cameraVideo by remember { mutableStateOf(false) }
-    var requestLocation by remember { mutableStateOf(false) }
+    var locationRequestId by remember { mutableStateOf(0) }
+    var isLocating by remember { mutableStateOf(false) }
     val formScrollState = rememberScrollState()
 
     LaunchedEffect(recordId, duplicateId) {
@@ -127,22 +128,35 @@ fun RecordEditScreen(
             viewModel.clearMessage()
         }
     }
-    LaunchedEffect(requestLocation) {
-        if (!requestLocation) return@LaunchedEffect
-        requestLocation = false
-        val place = LocationHelper.currentPlace(context)
-        if (place != null) {
-            viewModel.setLocation(place)
-        } else {
-            snackbarHostState.showSnackbar("暂时拿不到定位，手动填写位置即可")
+    LaunchedEffect(locationRequestId) {
+        if (locationRequestId == 0) return@LaunchedEffect
+        isLocating = true
+        try {
+            when (val result = LocationHelper.currentPlace(context)) {
+                is LocationHelper.Result.Success -> viewModel.setLocation(result.place)
+                LocationHelper.Result.PermissionMissing ->
+                    snackbarHostState.showSnackbar("没有定位权限，手动填写位置即可")
+                LocationHelper.Result.LocationDisabled ->
+                    snackbarHostState.showSnackbar("系统定位已关闭，请打开定位或手动填写位置")
+                LocationHelper.Result.Timeout ->
+                    snackbarHostState.showSnackbar("当前没有定位信号，手动填写位置即可")
+                is LocationHelper.Result.Failed ->
+                    snackbarHostState.showSnackbar(
+                        result.message ?: "定位失败，手动填写位置即可",
+                    )
+            }
+        } finally {
+            isLocating = false
         }
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
-            requestLocation = true
+            locationRequestId++
         } else {
             scope.launch { snackbarHostState.showSnackbar("没有定位权限，手动填写位置即可") }
         }
@@ -309,22 +323,36 @@ fun RecordEditScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
                         trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (LocationHelper.hasPermission(context)) {
-                                        requestLocation = true
-                                    } else {
-                                        locationPermissionLauncher.launch(
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.testTag("use_location"),
-                            ) {
-                                Icon(
-                                    Icons.Filled.LocationOn,
-                                    contentDescription = "使用当前位置",
+                            if (isLocating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .semantics {
+                                            contentDescription = "正在获取当前位置"
+                                        },
+                                    strokeWidth = 2.dp,
                                 )
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        if (LocationHelper.hasPermission(context)) {
+                                            locationRequestId++
+                                        } else {
+                                            locationPermissionLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                                ),
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("use_location"),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.LocationOn,
+                                        contentDescription = "使用当前位置",
+                                    )
+                                }
                             }
                         },
                     )

@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.1.0
+版本：1.1.1
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -12,9 +12,9 @@
 | JVM 单元测试 | 19 / 19 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 17 / 17 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T08-08-45.542Z-18b399e3aee5` |
-| Release APK | 已签名，3.9 MB（v1.1.0，versionCode 10） | `apksigner verify` 通过 |
-| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.0.8 → v1.1.0） | 见第 6 节、`docs/screenshots/update-*.png` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T11-24-11.876Z-eecef12d5d40` |
+| Release APK | 已签名，3.9 MB（v1.1.1，versionCode 11） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.1.0 → v1.1.1） | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（19）
 
@@ -46,7 +46,7 @@
 
 - `RecordDaoTest`
   - 记录 / 附件 1:N 关系；删除记录级联删除附件。
-  - 位置、订单号、楼层、房号、尾号、性格标签搜索；要爬楼 / 免爬 / 会下来 / 有媒体筛选。
+  - 位置、订单号、楼层、房号、尾号、性格标签搜索；要爬楼 / 免爬 / 会下来筛选。
   - 本月统计、最近位置聚合。
 - `BackupManagerTest`
   - 导出 → 导入往返：字段、标签、媒体文件均恢复。
@@ -82,6 +82,8 @@
 | 应用内录像（4 秒）并在 Media3 播放 | 通过 | `docs/screenshots/viewer-video.png` |
 | 照片全屏查看 | 通过 | `docs/screenshots/viewer-photo.png` |
 | 搜索、筛选、删除 | 通过 | instrumented `RecordFlowTest` |
+| 位置按钮 → 获取 GPS → 自动填写 | 通过 | 独立 API 35 模拟器 `geo fix`，填入“东城区天安门城楼”；`location-filled.png` |
+| 移除「有媒体」筛选 chip | 通过 | instrumented `RecordFlowTest` 断言不存在；首页 1.0×/1.3× 截图 |
 | 备注写入/详情/列表/搜索 | 通过 | instrumented `RecordFlowTest`、`RecordDaoTest` |
 | 爬楼说明写入/详情/列表/搜索/备份 | 通过 | instrumented `RecordFlowTest`、`RecordDaoTest`、`BackupManagerTest` |
 | 订单截屏缩略图 → 放大 → 点图关闭 | 通过 | instrumented `RecordFlowTest`；`list-thumbnail.png`、`thumbnail-zoom.png` |
@@ -110,7 +112,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.1.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T08-08-45.542Z-18b399e3aee5`，seal `sha256:e5687b59854365d997a650555f02735d076d3ec7012f0e88209aaecab80f1f86`。
+- 结果（v1.1.1 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T11-24-11.876Z-eecef12d5d40`，seal `sha256:9be5587153a6557e9d689afae1494b9ecf89b44d73fe8c21dac05916e001c35c`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
@@ -140,6 +142,9 @@
 | 现场空状态 CTA 用深棕主色 | 改为安全琥珀 primaryContainer |
 | 全屏放大层顶部残留灰色系统栏 | 改为应用内全屏覆盖层，放大时状态栏/导航栏图标转白，关闭后恢复 |
 | 全量仪器化运行时相机绑定偶发超时 | 相机就绪等待从 30s 放宽到 60s（慢速模拟器），全量 14/14 通过 |
+| 点「使用当前位置」后不填写 | `LaunchedEffect` 把自身 key 从 true 改回 false，协程立即被取消；改为递增 `locationRequestId` |
+| 只授予大致位置时被当成无权限 | 权限请求改为同时申请精确+大致位置，任一授予即继续；网络定位可用 |
+| 只有 lastKnown 为空时永远拿不到位置 | 增加网络/GPS 主动定位、超时和最近位置回退，并给出关闭定位/无信号提示 |
 
 ### 设计 finish review
 
@@ -153,7 +158,7 @@
 
 ## 6. 应用内更新 E2E
 
-安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8、v1.0.8 → v1.1.0 均走完整链路，最终版本 **v1.1.0（versionCode 10）**。
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8、v1.0.8 → v1.1.0、v1.1.0 → v1.1.1 均走完整链路，最终版本 **v1.1.1（versionCode 11）**。
 
 - 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
 - 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
@@ -164,6 +169,7 @@
 - v1.0.6 → v1.0.7 首次启动执行 Room v2→v3 迁移，新增 `climbNote` 列；旧记录保留，并在 release 包中补填爬楼说明、保存后详情正确显示。
 - v1.0.7 → v1.0.8 覆盖安装成功，旧「Release Test」记录保留；本版本为安全/稳定性修复，数据库结构不变。
 - v1.0.8 → v1.1.0 覆盖安装成功，旧记录保留；本版本仅品牌/页面视觉刷新，无数据库结构变化。
+- v1.1.0 → v1.1.1 覆盖安装成功，旧记录保留；本版本修复定位自动填写并移除「有媒体」筛选。
 
 ## 7. 证据目录
 
@@ -171,6 +177,7 @@
 - `docs/screenshots/form-edit.png` / `form-dark.png` / `form-font13.png` / `form-landscape.png`
 - `docs/screenshots/media-empty.png`
 - `docs/screenshots/list-thumbnail.png` / `thumbnail-zoom.png` / `thumbnail-zoom-dark.png`
+- `docs/screenshots/location-filled.png`
 - `docs/screenshots/detail.png` / `detail-dark.png` / `detail-media.png`
 - `docs/screenshots/settings.png` / `settings-dark.png`
 - `docs/screenshots/viewer-photo.png` / `viewer-video.png`

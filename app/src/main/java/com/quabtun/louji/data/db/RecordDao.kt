@@ -35,9 +35,6 @@ interface RecordDao {
             OR (:filter = 'STAIRS' AND noStairs = 'NO')
             OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
             OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
-            OR (:filter = 'WITH_MEDIA' AND EXISTS(
-                SELECT 1 FROM attachments WHERE attachments.recordId = records.id
-            ))
         )
         ORDER BY createdAt DESC
         """,

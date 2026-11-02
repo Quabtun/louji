@@ -95,6 +95,7 @@ class RecordFlowTest {
             compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("filter_ALL").performClick()
+        compose.onAllNodesWithText("有媒体").assertCountEquals(0)
         compose.onNodeWithText("备注：门禁在左手边").assertExists()
         compose.onNodeWithText("详细信息").performClick()
         waitForDetail()

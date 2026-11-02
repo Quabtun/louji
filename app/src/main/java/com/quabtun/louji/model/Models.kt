@@ -22,7 +22,6 @@ enum class RecordFilter {
     STAIRS,
     NO_STAIRS,
     WILL_COME_DOWN,
-    WITH_MEDIA,
 }
 
 object PersonalityTags {

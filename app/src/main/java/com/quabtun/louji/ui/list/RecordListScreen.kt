@@ -358,7 +358,6 @@ private fun FilterRow(selected: RecordFilter, onSelect: (RecordFilter) -> Unit) 
         RecordFilter.STAIRS to "要爬楼",
         RecordFilter.NO_STAIRS to "免爬",
         RecordFilter.WILL_COME_DOWN to "会下来",
-        RecordFilter.WITH_MEDIA to "有媒体",
     )
     Row(
         modifier = Modifier

@@ -6,6 +6,7 @@ import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordStats
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,7 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class RecordListViewModel(private val repository: RecordRepository) : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
