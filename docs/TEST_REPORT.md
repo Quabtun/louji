@@ -161,6 +161,7 @@
 - 数据库迁移：v1.0.4 → v1.0.5 首次启动执行 Room v1→v2 迁移，新增 `remark` 列且旧记录保留；已在模拟器实测。
 - v1.0.5 → v1.0.6 无数据库结构变化，覆盖安装后原有记录与媒体正常显示。
 - v1.0.6 → v1.0.7 首次启动执行 Room v2→v3 迁移，新增 `climbNote` 列；旧记录保留，并在 release 包中补填爬楼说明、保存后详情正确显示。
+- v1.0.7 → v1.0.8 覆盖安装成功，旧「Release Test」记录保留；本版本为安全/稳定性修复，数据库结构不变。
 
 ## 7. 证据目录
 
@@ -177,6 +178,8 @@
 - `app/build/reports/lint-results-debug.html`
 
 > 说明：全局规则要求网页/应用自动化优先 Playwright MCP；Playwright 只驱动浏览器 DOM，无法驱动原生 Android APK。本项目使用 Android 官方等价栈（Compose instrumentation + adb/uiautomator + 模拟器截图）做真实点击与断言。所有 UI 截图均实际查看并修复后复拍。
+
+安全性、稳定性、可靠性和逻辑性的检查清单、发现与残余风险见 [`docs/AUDIT.md`](AUDIT.md)。
 
 ## 8. 已知限制
 
