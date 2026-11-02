@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -124,11 +125,27 @@ fun RecordListScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "楼记",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(Color(0xFF121517)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_louji_mark),
+                                contentDescription = null,
+                                modifier = Modifier.size(width = 22.dp, height = 14.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(9.dp))
+                        Text(
+                            text = "楼记",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
                 },
                 actions = {
                     IconButton(
@@ -409,6 +426,12 @@ private fun RecordCard(
                 }
             }
             Spacer(Modifier.height(14.dp))
+            Text(
+                text = if (item.floor.isBlank() && item.roomNo.isBlank()) "楼层 / 房号未填" else "楼层 / 房号",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 val hasPlace = item.floor.isNotBlank() || item.roomNo.isNotBlank()
                 Text(
@@ -445,12 +468,6 @@ private fun RecordCard(
                     }
                 }
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = if (item.floor.isBlank() && item.roomNo.isBlank()) "楼层 / 房号未填" else "楼层 / 房号",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             if (item.climbNote.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(

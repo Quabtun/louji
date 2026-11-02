@@ -51,7 +51,7 @@ No customer data, testimonials, benchmarks or production screenshots exist yet. 
 
 1. Record fast, read faster: the climb decision and the floor/room are always the first things visible.
 2. Facts over decoration: every status is written in words and reinforced by icon and color, never color alone.
-3. Private by default: data stays on the phone; network use is limited to the update check.
+3. Private by default: data stays on the phone; network use is limited to the update check and optional system location/geocoding when the rider taps the location button.
 4. Built for the doorway: large targets, one-handed reach, high contrast, dark and light themes.
 5. The rider's language wins over generic app copy.
 

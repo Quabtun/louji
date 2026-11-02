@@ -1,7 +1,7 @@
 # 楼记 · 安全性 / 稳定性 / 可靠性 / 逻辑性审计
 
 日期：2026-11-02
-审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）
+审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）。v1.1.0（versionCode 10）只调整图标与页面布局，不改变权限、网络、数据库或备份逻辑，沿用本报告结论。
 环境：Android Emulator `RiderClimbApi35`，API 35；JDK 17；Gradle 8.5；compileSdk/targetSdk 34
 
 ## 1. 结论摘要

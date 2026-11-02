@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.0.8
+版本：1.1.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -12,9 +12,9 @@
 | JVM 单元测试 | 19 / 19 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 17 / 17 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T07-17-11.135Z-3458fa7664f7` |
-| Release APK | 已签名，3.9 MB（v1.0.8，versionCode 9） | `apksigner verify` 通过 |
-| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4 → v1.0.5 → v1.0.6 → v1.0.7 → v1.0.8） | 见第 6 节、`docs/screenshots/update-*.png` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T08-08-45.542Z-18b399e3aee5` |
+| Release APK | 已签名，3.9 MB（v1.1.0，versionCode 10） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.0.8 → v1.1.0） | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（19）
 
@@ -110,7 +110,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.0.8 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T07-17-11.135Z-3458fa7664f7`，seal `sha256:c39332c8da899e88aa7269cf9cc259d4011de9bdb1fd1d1b2bcd9f17e42a788a`。
+- 结果（v1.1.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T08-08-45.542Z-18b399e3aee5`，seal `sha256:e5687b59854365d997a650555f02735d076d3ec7012f0e88209aaecab80f1f86`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
@@ -148,11 +148,12 @@
 - P2：门有问题不够醒目、FAB 超出内容边距、详情滚动后丢失身份、设置存储读数与记录矛盾 → v1.0.4 已修并重拍。
 - P3：客户标签占用信号绿、按钮圆角不一致、导入/导出图标同向 → v1.0.4 已修。
 - 重拍后未发现新的 P0/P1；保留的 P3 为横屏顶部 app bar 仍按窗口全宽排布（Material 标准行为）。
+- v1.1.0 设计刷新：图标改为「楼梯尽头的门」（琥珀楼梯 + 纸色门洞），首页加入品牌标识组合，列表/详情/现场统一的「楼层 / 房号」标签上移；48/192/512px 与 launcher 实机截图复验。
 - `impeccable detect` 对 native 源码返回空数组（该检测器只读 HTML/CSS）；实际门禁为模拟器截图验收 + native audit 清单。
 
 ## 6. 应用内更新 E2E
 
-安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8 均走完整链路，最终版本 **v1.0.8（versionCode 9）**。
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8、v1.0.8 → v1.1.0 均走完整链路，最终版本 **v1.1.0（versionCode 10）**。
 
 - 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
 - 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
@@ -162,6 +163,7 @@
 - v1.0.5 → v1.0.6 无数据库结构变化，覆盖安装后原有记录与媒体正常显示。
 - v1.0.6 → v1.0.7 首次启动执行 Room v2→v3 迁移，新增 `climbNote` 列；旧记录保留，并在 release 包中补填爬楼说明、保存后详情正确显示。
 - v1.0.7 → v1.0.8 覆盖安装成功，旧「Release Test」记录保留；本版本为安全/稳定性修复，数据库结构不变。
+- v1.0.8 → v1.1.0 覆盖安装成功，旧记录保留；本版本仅品牌/页面视觉刷新，无数据库结构变化。
 
 ## 7. 证据目录
 
@@ -185,6 +187,6 @@
 
 - 首版无云同步、账号、应用锁、Play 商店上架。
 - 相机预览在软件 GPU 的 `screencap` 中为黑屏，但文件与播放正常。
-- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 / v1.0.8 使用本地签名发布。
+- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 / v1.0.8 / v1.1.0 使用本地签名发布。
 - 当前 GitHub 账号 Actions 因计费被锁定，CI 工作流已在仓库中禁用；本地测试、Lint、Mimosa 与发布已全部完成。
 - 签名密钥丢失后无法覆盖安装新版本；README 已标注备份要求。

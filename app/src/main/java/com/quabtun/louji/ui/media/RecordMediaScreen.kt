@@ -240,6 +240,12 @@ private fun MediaHeader(item: RecordWithAttachments) {
         Spacer(Modifier.height(16.dp))
         val hasPlace = record.floor.isNotBlank() || record.roomNo.isNotBlank()
         Text(
+            text = if (hasPlace) "楼层 / 房号" else "楼层 / 房号未填",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
             text = if (hasPlace) placeDisplay(record.floor, record.roomNo) else "—",
             style = if (hasPlace) {
                 MaterialTheme.typography.displayMedium.copy(
@@ -253,11 +259,6 @@ private fun MediaHeader(item: RecordWithAttachments) {
             else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = if (hasPlace) "楼层 / 房号" else "楼层 / 房号未填",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (record.climbNote.isNotBlank()) {
             Spacer(Modifier.height(10.dp))

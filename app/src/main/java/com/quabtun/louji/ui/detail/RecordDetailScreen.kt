@@ -476,6 +476,12 @@ private fun DetailHeader(item: RecordWithAttachments) {
         Spacer(Modifier.height(16.dp))
         val hasPlace = record.floor.isNotBlank() || record.roomNo.isNotBlank()
         Text(
+            text = if (hasPlace) "楼层 / 房号" else "楼层 / 房号未填",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
             text = if (hasPlace) placeDisplay(record.floor, record.roomNo) else "—",
             style = if (hasPlace) {
                 MaterialTheme.typography.displayLarge.copy(
@@ -489,11 +495,6 @@ private fun DetailHeader(item: RecordWithAttachments) {
             else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = if (hasPlace) "楼层 / 房号" else "楼层 / 房号未填",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val meta = buildList {
             if (record.gender != com.quabtun.louji.model.Gender.UNKNOWN) {

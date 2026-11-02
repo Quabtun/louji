@@ -1,3 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
-  <g transform="translate(11.8,0.38) scale(0.82)"><path fill="#FFC83D" fill-rule="evenodd" d="M23.20,86.06H81.84V46.83A2.11,2.11 0 0 0 79.73,44.72H65.39A2.11,2.11 0 0 0 63.28,46.83V59.06H44.30A2.11,2.11 0 0 0 42.19,61.17V74.25H23.20A2.11,2.11 0 0 0 21.09,76.36V86.06ZM67.50,86.06V60.75A5.06,5.06 0 0 1 77.63,60.75V86.06Z"/></g>
+  <g transform="translate(5.81,5.81) scale(0.09412)">
+    <path fill="#FFC83D" d="M172,726H852V298H452V454H312V598H172V726Z"/>
+    <path fill="#F4F1EA" d="M572,726V462A80,80 0 0 1 732,462V726Z"/>
+  </g>
 </svg>
