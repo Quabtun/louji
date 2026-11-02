@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 
 @OptIn(FlowPreview::class)
@@ -24,11 +25,15 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
     private val _filter = MutableStateFlow(RecordFilter.ALL)
     val filter: StateFlow<RecordFilter> = _filter.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     val records: StateFlow<List<RecordWithAttachments>> = combine(
         _query.debounce(220),
         _filter,
     ) { query, filter -> query to filter }
         .flatMapLatest { (query, filter) -> repository.observeRecords(query, filter) }
+        .onEach { _isLoading.value = false }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

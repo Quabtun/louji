@@ -481,6 +481,23 @@ fun RecordEditScreen(
                     )
 
                     Spacer(Modifier.height(24.dp))
+                    SectionHeader("备注")
+                    Spacer(Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = ui.draft.remark,
+                        onValueChange = viewModel::setRemark,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("field_remark"),
+                        label = { Text("备注") },
+                        placeholder = { Text("门禁、电梯、放门口位置，或任何要记住的事…") },
+                        supportingText = { Text("${ui.draft.remark.length}/300") },
+                        minLines = 3,
+                        maxLines = 6,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+
+                    Spacer(Modifier.height(24.dp))
                     SectionHeader("现场")
                     Spacer(Modifier.height(14.dp))
                     Row(

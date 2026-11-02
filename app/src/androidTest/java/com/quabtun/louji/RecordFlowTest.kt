@@ -52,6 +52,7 @@ class RecordFlowTest {
         compose.onNodeWithText("会下来拿").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("好沟通").performScrollTo().assertExists()
         compose.onNodeWithText("Nice, calls before arriving").performScrollTo().assertExists()
+        compose.onNodeWithText("门禁在左手边").performScrollTo().assertExists()
         compose.onAllNodesWithText("不用爬楼").assertCountEquals(2)
     }
 
@@ -79,7 +80,8 @@ class RecordFlowTest {
             compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("filter_ALL").performClick()
-        compose.onNodeWithText("阳光花园 3 栋").performClick()
+        compose.onNodeWithText("备注：门禁在左手边").assertExists()
+        compose.onNodeWithText("详细信息").performClick()
         waitForDetail()
 
         compose.onNodeWithContentDescription("更多").performClick()
@@ -89,6 +91,23 @@ class RecordFlowTest {
             compose.onAllNodesWithText("还没有记录").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("还没有记录").assertIsDisplayed()
+    }
+
+    @Test
+    fun cardOpensMediaGalleryAndDetailEntry() {
+        createRecord()
+        backToList()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("阳光花园 3 栋").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("record_media").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("还没有现场图片或视频").assertIsDisplayed()
+        compose.onNodeWithTag("media_details").performClick()
+        waitForDetail()
+        compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
     }
 
     @Test
@@ -127,6 +146,9 @@ class RecordFlowTest {
         compose.onNodeWithTag("tag_好沟通").performScrollTo().performClick()
         compose.onNodeWithTag("field_note").performScrollTo()
             .performTextInput("Nice, calls before arriving")
+        Espresso.closeSoftKeyboard()
+        compose.onNodeWithTag("field_remark").performScrollTo()
+            .performTextInput("门禁在左手边")
         Espresso.closeSoftKeyboard()
         compose.onNodeWithTag("save_record").performClick()
         waitForDetail()

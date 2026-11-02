@@ -26,6 +26,7 @@ data class BackupRecord(
     val willComeDown: String = "UNKNOWN",
     val personalityTags: List<String> = emptyList(),
     val personalityNote: String = "",
+    val remark: String = "",
     val createdAt: Long,
     val updatedAt: Long,
     val attachments: List<BackupAttachment> = emptyList(),

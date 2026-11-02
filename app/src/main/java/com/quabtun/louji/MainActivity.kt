@@ -45,7 +45,9 @@ import com.quabtun.louji.ui.edit.RecordEditViewModel
 import com.quabtun.louji.ui.list.RecordListScreen
 import com.quabtun.louji.ui.list.RecordListViewModel
 import com.quabtun.louji.ui.media.MediaViewerScreen
+import com.quabtun.louji.ui.media.RecordMediaScreen
 import com.quabtun.louji.ui.media.MediaViewerViewModel
+import com.quabtun.louji.ui.media.RecordMediaViewModel
 import com.quabtun.louji.ui.settings.SettingsScreen
 import com.quabtun.louji.ui.settings.SettingsViewModel
 import com.quabtun.louji.ui.theme.LouJiTheme
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
 private const val ROUTE_LIST = "records"
 private const val ROUTE_EDIT = "edit?recordId={recordId}&duplicateId={duplicateId}"
 private const val ROUTE_DETAIL = "detail/{recordId}"
+private const val ROUTE_RECORD_MEDIA = "record-media/{recordId}"
 private const val ROUTE_VIEWER = "viewer/{recordId}?index={index}"
 private const val ROUTE_SETTINGS = "settings"
 private const val GITHUB_URL = "https://github.com/Quabtun/louji"
@@ -122,7 +125,8 @@ private fun LouJiRoot(container: AppContainer) {
                     RecordListScreen(
                         viewModel = viewModel,
                         onCreate = { navController.navigate(editRoute()) },
-                        onOpenRecord = { id -> navController.navigate("detail/$id") },
+                        onOpenMedia = { id -> navController.navigate("record-media/$id") },
+                        onOpenDetail = { id -> navController.navigate("detail/$id") },
                         onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                     )
                 }
@@ -170,6 +174,23 @@ private fun LouJiRoot(container: AppContainer) {
                         onOpenMedia = { id, index ->
                             navController.navigate("viewer/$id?index=$index")
                         },
+                    )
+                }
+                composable(
+                    route = ROUTE_RECORD_MEDIA,
+                    arguments = listOf(navArgument("recordId") { type = NavType.LongType }),
+                ) { entry ->
+                    val recordId = entry.arguments?.getLong("recordId") ?: return@composable
+                    val viewModel: RecordMediaViewModel = viewModel(factory = factory)
+                    RecordMediaScreen(
+                        viewModel = viewModel,
+                        recordId = recordId,
+                        onBack = { navController.popBackStack() },
+                        onOpenDetail = { navController.navigate("detail/$recordId") },
+                        onOpenMedia = { index ->
+                            navController.navigate("viewer/$recordId?index=$index")
+                        },
+                        onEdit = { navController.navigate(editRoute(recordId = recordId)) },
                     )
                 }
                 composable(

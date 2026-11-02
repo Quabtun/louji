@@ -7,6 +7,7 @@ import com.quabtun.louji.ui.detail.RecordDetailViewModel
 import com.quabtun.louji.ui.edit.RecordEditViewModel
 import com.quabtun.louji.ui.list.RecordListViewModel
 import com.quabtun.louji.ui.media.MediaViewerViewModel
+import com.quabtun.louji.ui.media.RecordMediaViewModel
 import com.quabtun.louji.ui.settings.SettingsViewModel
 import com.quabtun.louji.ui.update.UpdateViewModel
 
@@ -24,6 +25,9 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
 
         modelClass.isAssignableFrom(MediaViewerViewModel::class.java) ->
             MediaViewerViewModel(container.repository) as T
+
+        modelClass.isAssignableFrom(RecordMediaViewModel::class.java) ->
+            RecordMediaViewModel(container.repository) as T
 
         modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
             SettingsViewModel(container) as T

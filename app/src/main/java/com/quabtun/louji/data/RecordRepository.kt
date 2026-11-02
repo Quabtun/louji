@@ -62,6 +62,7 @@ class RecordRepository(
                         willComeDown = draft.willComeDown,
                         personalityTags = draft.personalityTags.distinct(),
                         personalityNote = draft.personalityNote.trim(),
+                        remark = draft.remark.trim(),
                         createdAt = now,
                         updatedAt = now,
                     ),
@@ -81,6 +82,7 @@ class RecordRepository(
                         willComeDown = draft.willComeDown,
                         personalityTags = draft.personalityTags.distinct(),
                         personalityNote = draft.personalityNote.trim(),
+                        remark = draft.remark.trim(),
                         updatedAt = now,
                     ),
                 )
@@ -151,6 +153,7 @@ class RecordRepository(
             willComeDown = record.willComeDown,
             personalityTags = record.personalityTags,
             personalityNote = record.personalityNote,
+            remark = record.remark,
         )
     }
 

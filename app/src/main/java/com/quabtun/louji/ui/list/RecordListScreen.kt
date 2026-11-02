@@ -26,10 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -78,13 +80,15 @@ import com.quabtun.louji.util.recordSearchSubtitle
 fun RecordListScreen(
     viewModel: RecordListViewModel,
     onCreate: () -> Unit,
-    onOpenRecord: (Long) -> Unit,
+    onOpenMedia: (Long) -> Unit,
+    onOpenDetail: (Long) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val records by viewModel.records.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     Scaffold(
@@ -150,7 +154,18 @@ fun RecordListScreen(
                         onSelect = viewModel::setFilter,
                     )
                 }
-                if (records.isEmpty()) {
+                if (records.isEmpty() && isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (records.isEmpty()) {
                     item {
                         val clearFilters = {
                             viewModel.setQuery("")
@@ -186,7 +201,11 @@ fun RecordListScreen(
                     }
                 } else {
                     items(records, key = { it.record.id }) { record ->
-                        RecordCard(record = record, onClick = { onOpenRecord(record.record.id) })
+                        RecordCard(
+                            record = record,
+                            onClick = { onOpenMedia(record.record.id) },
+                            onOpenDetail = { onOpenDetail(record.record.id) },
+                        )
                     }
                 }
                 }
@@ -310,7 +329,11 @@ private fun FilterRow(selected: RecordFilter, onSelect: (RecordFilter) -> Unit) 
 }
 
 @Composable
-private fun RecordCard(record: RecordWithAttachments, onClick: () -> Unit) {
+private fun RecordCard(
+    record: RecordWithAttachments,
+    onClick: () -> Unit,
+    onOpenDetail: () -> Unit,
+) {
     val item = record.record
     val status = LocalLouJiStatusColors.current
     Surface(
@@ -404,6 +427,16 @@ private fun RecordCard(record: RecordWithAttachments, onClick: () -> Unit) {
                     },
                 )
             }
+            if (item.remark.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "备注：${item.remark}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (record.attachments.isNotEmpty()) {
@@ -429,6 +462,20 @@ private fun RecordCard(record: RecordWithAttachments, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.weight(1f))
+                TextButton(
+                    onClick = onOpenDetail,
+                    modifier = Modifier
+                        .padding(end = 64.dp)
+                        .testTag("details_${item.id}"),
+                ) {
+                    Icon(
+                        Icons.Filled.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("详细信息", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }

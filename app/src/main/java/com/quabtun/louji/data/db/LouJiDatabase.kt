@@ -5,10 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, AttachmentEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -17,8 +19,15 @@ abstract class LouJiDatabase : RoomDatabase() {
     abstract fun attachmentDao(): AttachmentDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE records ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun build(context: Context): LouJiDatabase =
             Room.databaseBuilder(context, LouJiDatabase::class.java, "louji.db")
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

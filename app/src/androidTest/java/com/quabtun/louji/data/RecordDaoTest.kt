@@ -60,7 +60,13 @@ class RecordDaoTest {
     @Test
     fun searchCoversFieldsAndFilters() = runBlocking {
         val noStairs = recordDao.insert(
-            record("阳光花园", "A12345", noStairs = TriState.YES, willComeDown = TriState.YES),
+            record(
+                "阳光花园",
+                "A12345",
+                noStairs = TriState.YES,
+                willComeDown = TriState.YES,
+                remark = "门禁在左手边",
+            ),
         )
         val stairs = recordDao.insert(
             record("老小区", "B999", noStairs = TriState.NO, willComeDown = TriState.NO),
@@ -71,6 +77,7 @@ class RecordDaoTest {
         assertEquals(1, recordDao.observeFiltered("A12345", "ALL").first().size)
         assertEquals(1, recordDao.observeFiltered("老小区", "ALL").first().size)
         assertEquals(2, recordDao.observeFiltered("4821", "ALL").first().size)
+        assertEquals(1, recordDao.observeFiltered("门禁", "ALL").first().size)
         assertEquals(1, recordDao.observeFiltered("", "NO_STAIRS").first().size)
         assertEquals(
             "老小区",
@@ -104,6 +111,7 @@ class RecordDaoTest {
         orderNo: String,
         noStairs: TriState = TriState.UNKNOWN,
         willComeDown: TriState = TriState.UNKNOWN,
+        remark: String = "",
     ) = RecordEntity(
         location = location,
         orderNo = orderNo,
@@ -117,6 +125,7 @@ class RecordDaoTest {
         willComeDown = willComeDown,
         personalityTags = listOf("好沟通"),
         personalityNote = "",
+        remark = remark,
         createdAt = System.currentTimeMillis(),
         updatedAt = System.currentTimeMillis(),
     )

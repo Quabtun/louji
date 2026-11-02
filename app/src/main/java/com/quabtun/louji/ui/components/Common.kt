@@ -382,7 +382,7 @@ fun LedgerRow(
     ) {
         Text(
             text = label,
-            modifier = Modifier.width(82.dp),
+            modifier = Modifier.width(104.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

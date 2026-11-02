@@ -358,6 +358,19 @@ fun RecordDetailScreen(
                         }
 
                         Spacer(Modifier.height(20.dp))
+                        SectionHeader("备注")
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = item.record.remark.ifBlank { "还没有备注" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (item.record.remark.isBlank()) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+
+                        Spacer(Modifier.height(20.dp))
                         SectionHeader("现场")
                         Spacer(Modifier.height(14.dp))
                         if (item.attachments.isEmpty()) {

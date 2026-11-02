@@ -33,6 +33,7 @@ data class RecordEntity(
     val personalityNote: String,
     val createdAt: Long,
     val updatedAt: Long,
+    val remark: String = "",
 )
 
 @Entity(

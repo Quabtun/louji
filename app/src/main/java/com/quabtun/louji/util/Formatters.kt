@@ -91,7 +91,8 @@ fun RecordWithAttachments.shareText(): String {
         add("门：${record.doorIntact.doorLabel()} · 上面能开门：${record.canOpenFromAbove.canOpenLabel()}")
         add("会下来拿：${record.willComeDown.comeDownLabel()}")
         if (record.personalityTags.isNotEmpty()) add("性格：${record.personalityTags.joinToString(" / ")}")
-        if (record.personalityNote.isNotBlank()) add("备注：${record.personalityNote}")
+        if (record.personalityNote.isNotBlank()) add("性格备注：${record.personalityNote}")
+        if (record.remark.isNotBlank()) add("备注：${record.remark}")
         if (attachments.isNotEmpty()) add("现场：${attachments.size} 个附件")
     }
     return lines.joinToString("\n")

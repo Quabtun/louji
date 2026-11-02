@@ -49,6 +49,7 @@ class FormattersTest {
             willComeDown = TriState.YES,
             personalityTags = listOf("爽快"),
             personalityNote = "放门口",
+            remark = "门禁在左手边",
             createdAt = 1L,
             updatedAt = 1L,
         )
@@ -71,6 +72,7 @@ class FormattersTest {
         assertTrue(text.contains("不用爬楼：是"))
         assertTrue(text.contains("门：完好"))
         assertTrue(text.contains("爽快"))
+        assertTrue(text.contains("备注：门禁在左手边"))
         assertTrue(text.contains("1 个附件"))
     }
 }

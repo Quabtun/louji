@@ -25,6 +25,7 @@ class BackupJsonTest {
             willComeDown = "YES",
             personalityTags = listOf("好沟通", "爽快"),
             personalityNote = "打电话会接",
+            remark = "门禁在左手边",
             createdAt = 1_700_000_000_000L,
             updatedAt = 1_700_000_100_000L,
             attachments = listOf(

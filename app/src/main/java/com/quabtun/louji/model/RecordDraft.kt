@@ -13,6 +13,7 @@ data class RecordDraft(
     val willComeDown: TriState = TriState.UNKNOWN,
     val personalityTags: List<String> = emptyList(),
     val personalityNote: String = "",
+    val remark: String = "",
 ) {
     fun hasMeaningfulContent(): Boolean =
         location.isNotBlank() ||
@@ -21,6 +22,7 @@ data class RecordDraft(
             floor.isNotBlank() ||
             roomNo.isNotBlank() ||
             personalityNote.isNotBlank() ||
+            remark.isNotBlank() ||
             personalityTags.isNotEmpty() ||
             noStairs != TriState.UNKNOWN ||
             doorIntact != TriState.UNKNOWN ||
