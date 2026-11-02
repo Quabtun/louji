@@ -102,7 +102,7 @@ class BackupManager(
             if (records.size > MAX_RECORDS) throw BackupException("备份中的记录过多")
 
             val prepared = mutableListOf<PreparedImport>()
-            val seenKeys = HashSet<String>()
+            val seenKeys = HashSet<Triple<String, String, Long>>()
             var skipped = 0
             records.forEach { backup ->
                 val location = backup.location.trim().take(120)
@@ -112,10 +112,10 @@ class BackupManager(
                 }
                 val createdAt = backup.createdAt.takeIf { it > 0 } ?: clock()
                 val orderNo = backup.orderNo.trim().take(60)
-                val signature = "$location|$orderNo|$createdAt"
                 if (mode == ImportMode.MERGE) {
                     val duplicateInDatabase = repository.countBySignature(location, orderNo, createdAt) > 0
-                    if (duplicateInDatabase || !seenKeys.add(signature)) {
+                    val key = Triple(location, orderNo, createdAt)
+                    if (duplicateInDatabase || !seenKeys.add(key)) {
                         skipped++
                         return@forEach
                     }
@@ -144,8 +144,8 @@ class BackupManager(
             }
 
             val copiedMedia = mutableListOf<MediaDraft>()
-            try {
-                val withMedia = prepared.map { item ->
+            val withMedia = try {
+                prepared.map { item ->
                     item.copy(
                         media = item.sourceAttachments.mapNotNull { (attachment, source) ->
                             val type = runCatching { MediaType.valueOf(attachment.type) }
@@ -180,19 +180,26 @@ class BackupManager(
                         },
                     )
                 }
-
-                val importedCount = repository.insertImportedBatch(
-                    items = withMedia.map { item -> item.toEntity(clock()) to item.media },
-                    replaceAll = mode == ImportMode.OVERWRITE,
-                )
-                val mediaCount = withMedia.sumOf { it.media.size }
-                mediaStore.sweepOrphans(repository.referencedMediaPaths())
-                onProgress(maxOf(importedCount, 1), maxOf(withMedia.size, 1))
-                ImportSummary(imported = importedCount, skipped = skipped, media = mediaCount)
             } catch (error: Throwable) {
                 copiedMedia.forEach { mediaStore.deleteDraft(it) }
                 throw error
             }
+
+            val importedCount = try {
+                repository.insertImportedBatch(
+                    items = withMedia.map { item -> item.toEntity(clock()) to item.media },
+                    replaceAll = mode == ImportMode.OVERWRITE,
+                )
+            } catch (error: Throwable) {
+                copiedMedia.forEach { mediaStore.deleteDraft(it) }
+                throw error
+            }
+            val mediaCount = withMedia.sumOf { it.media.size }
+            // The import is committed at this point. Cleanup or progress callbacks must never
+            // delete files that the database now references.
+            runCatching { mediaStore.sweepOrphans(repository.referencedMediaPaths()) }
+            runCatching { onProgress(maxOf(importedCount, 1), maxOf(withMedia.size, 1)) }
+            ImportSummary(imported = importedCount, skipped = skipped, media = mediaCount)
         } finally {
             temp.deleteRecursively()
         }
@@ -226,6 +233,11 @@ class BackupManager(
                         throw BackupException("备份文件包含不安全的路径")
                     }
                     target.parentFile?.mkdirs()
+                    val entryLimit = if (name.endsWith(".json")) {
+                        MAX_JSON_BYTES
+                    } else {
+                        MAX_SINGLE_FILE_BYTES
+                    }
                     var entryBytes = 0L
                     target.outputStream().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -234,8 +246,14 @@ class BackupManager(
                             if (read <= 0) break
                             entryBytes += read
                             totalBytes += read
-                            if (entryBytes > MAX_SINGLE_FILE_BYTES) {
-                                throw BackupException("备份中的单个文件过大")
+                            if (entryBytes > entryLimit) {
+                                throw BackupException(
+                                    if (name.endsWith(".json")) {
+                                        "备份中的说明文件过大"
+                                    } else {
+                                        "备份中的单个文件过大"
+                                    },
+                                )
                             }
                             if (totalBytes > MAX_TOTAL_BYTES) {
                                 throw BackupException("备份文件过大")
@@ -274,6 +292,7 @@ class BackupManager(
 
     private inline fun <reified T> readJson(file: File): T {
         if (!file.isFile) throw BackupException("备份缺少 ${file.name}")
+        if (file.length() > MAX_JSON_BYTES) throw BackupException("备份中的说明文件过大")
         return try {
             json.decodeFromString<T>(file.readText())
         } catch (error: Throwable) {
@@ -375,6 +394,7 @@ class BackupManager(
         const val MAX_RECORDS = 10_000
         const val MAX_ATTACHMENTS = 20
         const val MAX_ENTRIES = 20_000
+        const val MAX_JSON_BYTES = 16L * 1024 * 1024
         const val MAX_SINGLE_FILE_BYTES = 500L * 1024 * 1024
         const val MAX_TOTAL_BYTES = 8L * 1024 * 1024 * 1024
     }

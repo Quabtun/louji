@@ -11,6 +11,7 @@ import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordStats
 import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class RecordRepository(
     private val database: LouJiDatabase,
@@ -22,14 +23,17 @@ class RecordRepository(
 
     fun observeRecords(query: String, filter: RecordFilter): Flow<List<RecordWithAttachments>> =
         recordDao.observeFiltered(query.trim(), filter.name)
+            .map { records -> records.map { it.withOrderedAttachments() } }
 
     fun observeRecord(id: Long): Flow<RecordWithAttachments?> = recordDao.observeRecord(id)
+        .map { it?.withOrderedAttachments() }
 
     fun observeStats(): Flow<RecordStats> = recordDao.observeStats(startOfMonth(clock()))
 
     fun observeRecentLocations(): Flow<List<String>> = recordDao.observeRecentLocations()
 
-    suspend fun getRecord(id: Long): RecordWithAttachments? = recordDao.getRecord(id)
+    suspend fun getRecord(id: Long): RecordWithAttachments? =
+        recordDao.getRecord(id)?.withOrderedAttachments()
 
     suspend fun save(
         draft: RecordDraft,
@@ -169,7 +173,8 @@ class RecordRepository(
         return paths
     }
 
-    suspend fun allRecords(): List<RecordWithAttachments> = recordDao.getAllOnce()
+    suspend fun allRecords(): List<RecordWithAttachments> =
+        recordDao.getAllOnce().map { it.withOrderedAttachments() }
 
     suspend fun countBySignature(location: String, orderNo: String, createdAt: Long): Int =
         recordDao.countBySignature(location, orderNo, createdAt)
@@ -238,6 +243,13 @@ class RecordRepository(
             recordDao.deleteAll()
         }
     }
+
+    private fun RecordWithAttachments.withOrderedAttachments(): RecordWithAttachments =
+        if (attachments.size < 2) {
+            this
+        } else {
+            copy(attachments = attachments.sortedWith(compareBy({ it.createdAt }, { it.id })))
+        }
 
     private fun startOfMonth(now: Long): Long = Calendar.getInstance().apply {
         timeInMillis = now

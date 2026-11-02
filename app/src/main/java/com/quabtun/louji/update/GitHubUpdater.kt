@@ -12,6 +12,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
@@ -64,9 +65,13 @@ class GitHubUpdater(
         info: UpdateInfo,
         onProgress: (Float) -> Unit = {},
     ): File = withContext(Dispatchers.IO) {
+        if (info.apkSize > MAX_APK_BYTES) {
+            throw IOException("安装包过大，已停止下载")
+        }
+        val version = safeVersionName(info.versionName)
         val directory = File(context.cacheDir, "updates").apply { mkdirs() }
-        val target = File(directory, "louji-${info.versionName}.apk")
-        val partial = File(directory, "louji-${info.versionName}.apk.part")
+        val target = File(directory, "louji-$version.apk")
+        val partial = File(directory, "louji-$version.apk.part")
         partial.delete()
         val request = Request.Builder()
             .url(info.apkUrl)
@@ -74,18 +79,26 @@ class GitHubUpdater(
             .build()
         try {
             client.newCall(request).execute().use { response ->
+                verifyGitHubUrl(response.request.url.toString())
                 if (!response.isSuccessful) throw IOException("下载失败：HTTP ${response.code}")
                 val body = response.body ?: throw IOException("下载失败：没有内容")
                 val total = body.contentLength().takeIf { it > 0 } ?: info.apkSize
+                if (total > MAX_APK_BYTES) {
+                    throw IOException("安装包过大，已停止下载")
+                }
                 body.byteStream().use { input ->
                     partial.outputStream().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         var written = 0L
                         var lastReported = 0
                         while (true) {
+                            coroutineContext.ensureActive()
                             val read = input.read(buffer)
                             if (read <= 0) break
                             written += read
+                            if (written > MAX_APK_BYTES) {
+                                throw IOException("安装包过大，已停止下载")
+                            }
                             output.write(buffer, 0, read)
                             if (total > 0) {
                                 val percent = ((written * 100) / total).toInt()
@@ -100,11 +113,18 @@ class GitHubUpdater(
                 if (info.apkSize > 0 && partial.length() != info.apkSize) {
                     throw IOException("下载不完整，请重试")
                 }
-                val expected = info.sha256Url?.let { fetchChecksum(it) }
+                val expected = info.sha256Url?.let {
+                    fetchChecksum(it) ?: throw IOException("校验文件不可用，请重试")
+                }
                 if (expected != null && !sha256(partial).equals(expected, ignoreCase = true)) {
                     throw IOException("安装包校验失败，请重试")
                 }
-                partial.renameTo(target)
+                if (target.exists() && !target.delete()) {
+                    throw IOException("无法替换旧安装包")
+                }
+                if (!partial.renameTo(target)) {
+                    throw IOException("下载文件无法保存")
+                }
                 if (!target.isFile || target.length() == 0L) {
                     throw IOException("下载文件无法保存")
                 }
@@ -154,6 +174,7 @@ class GitHubUpdater(
             .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
             .build()
         client.newCall(request).execute().use { response ->
+            verifyGitHubUrl(response.request.url.toString())
             if (!response.isSuccessful) return null
             val text = response.body?.string().orEmpty().trim()
             return text.split(Regex("\\s+")).firstOrNull()
@@ -172,6 +193,12 @@ class GitHubUpdater(
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun safeVersionName(raw: String): String {
+        val safe = raw.filter { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
+        if (safe.isBlank()) throw IOException("版本号无效")
+        return safe.take(64)
     }
 
     private fun verifyGitHubUrl(url: String) {
@@ -202,6 +229,8 @@ class GitHubUpdater(
     )
 
     private companion object {
+        const val MAX_APK_BYTES = 250L * 1024 * 1024
+
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

@@ -132,13 +132,24 @@ class LocalMediaStore(
         StorageUsage(mediaBytes = mediaBytes, thumbBytes = thumbBytes, itemCount = mediaCount)
     }
 
-    /** Deletes media files that no record references. Called after destructive imports. */
-    suspend fun sweepOrphans(keepPaths: Set<String>) = withContext(Dispatchers.IO) {
+    /**
+     * Deletes media files that no record references. A grace period lets startup cleanup run
+     * without racing a file that was just captured but not yet saved to the database.
+     */
+    suspend fun sweepOrphans(
+        keepPaths: Set<String>,
+        minAgeMs: Long = 0L,
+    ) = withContext(Dispatchers.IO) {
+        val cutoff = System.currentTimeMillis() - minAgeMs.coerceAtLeast(0L)
         mediaRoot.listFiles()?.forEach { file ->
-            if (file.isFile && file.absolutePath !in keepPaths) file.delete()
+            if (file.isFile && file.absolutePath !in keepPaths && file.lastModified() <= cutoff) {
+                file.delete()
+            }
         }
         thumbsRoot.listFiles()?.forEach { file ->
-            if (file.isFile && file.absolutePath !in keepPaths) file.delete()
+            if (file.isFile && file.absolutePath !in keepPaths && file.lastModified() <= cutoff) {
+                file.delete()
+            }
         }
     }
 

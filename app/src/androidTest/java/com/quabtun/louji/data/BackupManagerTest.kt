@@ -124,6 +124,26 @@ class BackupManagerTest {
     }
 
     @Test
+    fun mergeKeepsDistinctRecordsWhenSeparatorAppearsInFields(): Unit = runBlocking {
+        repositoryA.save(
+            draft = RecordDraft(location = "A|B", orderNo = "C"),
+            recordId = null,
+            pendingMedia = emptyList(),
+        )
+        repositoryA.save(
+            draft = RecordDraft(location = "A", orderNo = "B|C"),
+            recordId = null,
+            pendingMedia = emptyList(),
+        )
+        val zip = File(root, "separator.zip")
+        backupA.exportBackup(Uri.fromFile(zip))
+
+        val summary = backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE)
+        assertEquals(2, summary.imported)
+        assertEquals(2, repositoryB.allRecords().size)
+    }
+
+    @Test
     fun overwriteReplacesExistingRecords() = runBlocking {
         val zip = File(root, "empty.zip")
         backupA.exportBackup(Uri.fromFile(zip))
@@ -152,6 +172,20 @@ class BackupManagerTest {
             runBlocking { backupB.importBackup(Uri.fromFile(evil), ImportMode.MERGE) }
         }
         assertFalse(File(root.parentFile, "escape.txt").exists())
+    }
+
+    @Test
+    fun rejectsOversizedJsonEntryBeforeParsing(): Unit = runBlocking {
+        val huge = File(root, "huge-json.zip")
+        ZipOutputStream(huge.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("records.json"))
+            val chunk = ByteArray(64 * 1024) { ' '.code.toByte() }
+            repeat(273) { zip.write(chunk) }
+            zip.closeEntry()
+        }
+        assertThrows(BackupException::class.java) {
+            runBlocking { backupB.importBackup(Uri.fromFile(huge), ImportMode.MERGE) }
+        }
     }
 
     private companion object {

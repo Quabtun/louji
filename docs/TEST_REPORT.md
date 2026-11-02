@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.0.7
+版本：1.0.8
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -10,11 +10,11 @@
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
 | JVM 单元测试 | 19 / 19 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 14 / 14 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 35） | 17 / 17 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T05-12-57.134Z-bdf2e7cd18c2` |
-| Release APK | 已签名，3.8 MB（v1.0.7，versionCode 8） | `apksigner verify` 通过 |
-| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4 → v1.0.5 → v1.0.6 → v1.0.7） | 见第 6 节、`docs/screenshots/update-*.png` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-02T07-17-11.135Z-3458fa7664f7` |
+| Release APK | 已签名，3.9 MB（v1.0.8，versionCode 9） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → v1.0.3 → v1.0.4 → v1.0.5 → v1.0.6 → v1.0.7 → v1.0.8） | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（19）
 
@@ -34,7 +34,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 19 / 19 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（13，API 35 模拟器）
+## 3. 仪器化测试（17，API 35 模拟器）
 
 命令：
 
@@ -51,8 +51,12 @@
 - `BackupManagerTest`
   - 导出 → 导入往返：字段、标签、媒体文件均恢复。
   - 合并导入对相同签名的记录去重。
+  - 合并去重不会把含 `|` 的不同字段误判为同一条记录。
   - 覆盖导入清空旧记录。
   - 拒绝 zip 路径穿越（`../escape.txt`），不写出临时目录。
+  - 拒绝超过 16MB 的 `records.json`，在 JSON 解析前终止。
+- `DatabaseMigrationTest`
+  - 用 Room `MigrationTestHelper` 创建 v2 数据库，插入旧记录，执行 `MIGRATION_2_3` 并校验 `climbNote` 自动补为空串、旧字段保留。
 - `RecordFlowTest`
   - 通过真实表单创建含 11 个字段的记录，保存后进入详情并逐项断言。
   - 搜索、筛选、删除记录回空状态。
@@ -106,7 +110,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.0.7 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T05-12-57.134Z-bdf2e7cd18c2`，seal `sha256:bb37916aace2a6fe7f14a37677383b5883d40de1745ffa8fe7dba7ca76bdf62d`。
+- 结果（v1.0.8 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-02T07-17-11.135Z-3458fa7664f7`，seal `sha256:c39332c8da899e88aa7269cf9cc259d4011de9bdb1fd1d1b2bcd9f17e42a788a`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
@@ -148,7 +152,7 @@
 
 ## 6. 应用内更新 E2E
 
-安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7 均走完整链路，最终版本 **v1.0.7（versionCode 8）**。
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8 均走完整链路，最终版本 **v1.0.8（versionCode 9）**。
 
 - 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
 - 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
@@ -178,6 +182,6 @@
 
 - 首版无云同步、账号、应用锁、Play 商店上架。
 - 相机预览在软件 GPU 的 `screencap` 中为黑屏，但文件与播放正常。
-- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 使用本地签名发布。
+- GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 / v1.0.8 使用本地签名发布。
 - 当前 GitHub 账号 Actions 因计费被锁定，CI 工作流已在仓库中禁用；本地测试、Lint、Mimosa 与发布已全部完成。
 - 签名密钥丢失后无法覆盖安装新版本；README 已标注备份要求。

@@ -153,8 +153,14 @@ fun RecordEditScreen(
         viewModel.importUris(uris)
     }
 
-    val attemptBack = {
-        if (viewModel.hasUnsavedChanges()) showDiscardDialog = true else onBack()
+    val attemptBack: () -> Unit = {
+        if (ui.saving) {
+            scope.launch { snackbarHostState.showSnackbar("正在保存，请稍候") }
+        } else if (viewModel.hasUnsavedChanges()) {
+            showDiscardDialog = true
+        } else {
+            onBack()
+        }
     }
     val hasChanges = viewModel.hasUnsavedChanges()
 
@@ -171,7 +177,7 @@ fun RecordEditScreen(
         return
     }
 
-    BackHandler(enabled = hasChanges) { showDiscardDialog = true }
+    BackHandler(enabled = hasChanges || ui.saving) { attemptBack() }
 
     Scaffold(
         modifier = Modifier.semantics { testTagsAsResourceId = true },

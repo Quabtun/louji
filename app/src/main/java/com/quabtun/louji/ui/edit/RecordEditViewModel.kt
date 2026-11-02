@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 data class RecordEditUiState(
@@ -53,35 +54,45 @@ class RecordEditViewModel(
         if (initialized) return
         initialized = true
         viewModelScope.launch {
-            val existingRecord = requestedRecordId
-                ?.takeIf { duplicateId == null }
-                ?.let { repository.getRecord(it) }
-            val source = when {
-                duplicateId != null -> repository.getRecord(duplicateId)
-                requestedRecordId != null -> existingRecord
-                else -> null
-            }
-            if (requestedRecordId != null && duplicateId == null && source == null) {
-                _ui.update { it.copy(initialized = true, loadFailed = true) }
-                return@launch
-            }
-            val draft = when {
-                duplicateId != null -> source?.let { record ->
-                    record.record.toDraft().copy(orderNo = "")
+            try {
+                val existingRecord = requestedRecordId
+                    ?.takeIf { duplicateId == null }
+                    ?.let { repository.getRecord(it) }
+                val source = when {
+                    duplicateId != null -> repository.getRecord(duplicateId)
+                    requestedRecordId != null -> existingRecord
+                    else -> null
                 }
-                else -> source?.record?.toDraft()
-            } ?: RecordDraft()
-            val attachments = if (duplicateId == null) source?.attachments.orEmpty() else emptyList()
-            recordId = requestedRecordId?.takeIf { duplicateId == null }
-            initialDraft = draft
-            _ui.update {
-                it.copy(
-                    draft = draft,
-                    existingMedia = attachments,
-                    initialized = true,
-                    isEditing = recordId != null,
-                    loadFailed = false,
-                )
+                if (requestedRecordId != null && duplicateId == null && source == null) {
+                    _ui.update { it.copy(initialized = true, loadFailed = true) }
+                    return@launch
+                }
+                val draft = when {
+                    duplicateId != null -> source?.let { record ->
+                        record.record.toDraft().copy(orderNo = "")
+                    }
+                    else -> source?.record?.toDraft()
+                } ?: RecordDraft()
+                val attachments = if (duplicateId == null) {
+                    source?.attachments.orEmpty()
+                } else {
+                    emptyList()
+                }
+                recordId = requestedRecordId?.takeIf { duplicateId == null }
+                initialDraft = draft
+                _ui.update {
+                    it.copy(
+                        draft = draft,
+                        existingMedia = attachments,
+                        initialized = true,
+                        isEditing = recordId != null,
+                        loadFailed = false,
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                _ui.update { it.copy(initialized = true, loadFailed = true) }
             }
         }
     }
@@ -212,6 +223,7 @@ class RecordEditViewModel(
     }
 
     fun discard() {
+        if (_ui.value.saving) return
         _ui.value.pendingMedia.forEach(mediaStore::deleteDraft)
         _ui.update { it.copy(pendingMedia = emptyList()) }
     }
@@ -242,7 +254,9 @@ class RecordEditViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        if (!saved) {
+        // A save may already have inserted rows; leaking a draft is safer than deleting a
+        // file that the database now references. Startup cleanup removes true orphans.
+        if (!saved && !_ui.value.saving) {
             _ui.value.pendingMedia.forEach(mediaStore::deleteDraft)
         }
     }

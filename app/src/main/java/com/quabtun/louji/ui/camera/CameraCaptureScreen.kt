@@ -298,32 +298,44 @@ fun CameraCaptureScreen(
         } else if (!captureBusy) {
             captureBusy = true
             val file = mediaStore.newPhotoFile()
-            val options = ImageCapture.OutputFileOptions.Builder(file).build()
-            capture.takePicture(
-                options,
-                mainExecutor,
-                object : ImageCapture.OnImageSavedCallback {
-                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                        if (!alive.value) {
-                            file.delete()
-                            return
+            try {
+                val options = ImageCapture.OutputFileOptions.Builder(file).build()
+                capture.takePicture(
+                    options,
+                    mainExecutor,
+                    object : ImageCapture.OnImageSavedCallback {
+                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                            if (!alive.value) {
+                                file.delete()
+                                return
+                            }
+                            try {
+                                flashOverlay = true
+                                scope.launch {
+                                    delay(120)
+                                    flashOverlay = false
+                                }
+                                onCaptured(mediaStore.completePhoto(file))
+                            } catch (throwable: Throwable) {
+                                file.delete()
+                                error = "拍照处理失败：${throwable.message ?: "请重试"}"
+                            } finally {
+                                captureBusy = false
+                            }
                         }
-                        flashOverlay = true
-                        scope.launch {
-                            delay(120)
-                            flashOverlay = false
-                        }
-                        onCaptured(mediaStore.completePhoto(file))
-                        captureBusy = false
-                    }
 
-                    override fun onError(exception: ImageCaptureException) {
-                        file.delete()
-                        captureBusy = false
-                        error = "拍照失败：${exception.message ?: "请重试"}"
-                    }
-                },
-            )
+                        override fun onError(exception: ImageCaptureException) {
+                            file.delete()
+                            captureBusy = false
+                            error = "拍照失败：${exception.message ?: "请重试"}"
+                        }
+                    },
+                )
+            } catch (throwable: Throwable) {
+                file.delete()
+                captureBusy = false
+                error = "拍照失败：${throwable.message ?: "请重试"}"
+            }
         }
     }
 
@@ -336,49 +348,55 @@ fun CameraCaptureScreen(
             if (video == null || recorder == null) {
                 error = "相机还没准备好，请稍等"
             } else {
-                val file = mediaStore.newVideoFile()
-                discardVideo = false
-                val pending = recorder.prepareRecording(
-                    context,
-                    FileOutputOptions.Builder(file).build(),
-                )
-                val prepared = if (hasAudioPermission) pending.withAudioEnabled() else pending
-                val newRecording = prepared.start(mainExecutor) { event ->
-                    when (event) {
-                        is VideoRecordEvent.Start -> {
-                            isRecording = true
-                            recordingSeconds = 0
-                        }
+                var file: File? = null
+                try {
+                    val outputFile = mediaStore.newVideoFile().also { file = it }
+                    discardVideo = false
+                    val pending = recorder.prepareRecording(
+                        context,
+                        FileOutputOptions.Builder(outputFile).build(),
+                    )
+                    val prepared = if (hasAudioPermission) pending.withAudioEnabled() else pending
+                    val newRecording = prepared.start(mainExecutor) { event ->
+                        when (event) {
+                            is VideoRecordEvent.Start -> {
+                                isRecording = true
+                                recordingSeconds = 0
+                            }
 
-                        is VideoRecordEvent.Finalize -> {
-                            isRecording = false
-                            recording = null
-                            val discard = discardVideo
-                            discardVideo = false
-                            if (event.hasError() || discard) {
-                                file.delete()
-                                if (!discard) {
-                                    error = "录像失败：${event.error}"
-                                }
-                            } else if (!alive.value) {
-                                file.delete()
-                            } else {
-                                scope.launch {
-                                    try {
-                                        val draft = withContext(Dispatchers.IO) {
-                                            mediaStore.completeVideo(file)
+                            is VideoRecordEvent.Finalize -> {
+                                isRecording = false
+                                recording = null
+                                val discard = discardVideo
+                                discardVideo = false
+                                if (event.hasError() || discard) {
+                                    outputFile.delete()
+                                    if (!discard) {
+                                        error = "录像失败：${event.error}"
+                                    }
+                                } else if (!alive.value) {
+                                    outputFile.delete()
+                                } else {
+                                    scope.launch {
+                                        try {
+                                            val draft = withContext(Dispatchers.IO) {
+                                                mediaStore.completeVideo(outputFile)
+                                            }
+                                            onCaptured(draft)
+                                        } catch (throwable: Throwable) {
+                                            outputFile.delete()
+                                            error = "视频处理失败：${throwable.message ?: "请重试"}"
                                         }
-                                        onCaptured(draft)
-                                    } catch (throwable: Throwable) {
-                                        file.delete()
-                                        error = "视频处理失败：${throwable.message ?: "请重试"}"
                                     }
                                 }
                             }
                         }
                     }
+                    recording = newRecording
+                } catch (throwable: Throwable) {
+                    file?.delete()
+                    error = "录像失败：${throwable.message ?: "请重试"}"
                 }
-                recording = newRecording
             }
         }
     }

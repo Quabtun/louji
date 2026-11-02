@@ -1,6 +1,5 @@
 package com.quabtun.louji.ui.settings
 
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,12 +50,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -75,7 +72,6 @@ import com.quabtun.louji.ui.update.UpdateUiState
 import com.quabtun.louji.ui.update.UpdateViewModel
 import com.quabtun.louji.util.backupFileName
 import com.quabtun.louji.util.formatBytes
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -89,9 +85,7 @@ fun SettingsScreen(
     val storage by viewModel.storage.collectAsStateWithLifecycle()
     val backup by viewModel.backup.collectAsStateWithLifecycle()
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
@@ -267,7 +261,7 @@ fun SettingsScreen(
                 )
                 SettingsRow(
                     title = "隐私说明",
-                    subtitle = "记录只存本机；联网仅用于检查更新",
+                    subtitle = "记录只存本机；联网用于更新和可选定位",
                     icon = R.drawable.ic_info,
                     onClick = { showPrivacyDialog = true },
                 )
@@ -406,8 +400,8 @@ fun SettingsScreen(
             text = {
                 Text(
                     "楼记不要求登录，记录、截图、照片和视频都保存在本机应用私有目录。" +
-                        "联网只用于访问 GitHub 检查新版本，不上传任何记录。" +
-                        "导出的备份文件包含客户信息，请自行妥善保管。",
+                        "联网只用于访问 GitHub 检查新版本；点「使用当前位置」时，系统定位或地理编码服务可能会把坐标用于解析地址。" +
+                        "除此之外不上传任何记录。导出的备份文件包含客户信息，请自行妥善保管。",
                 )
             },
             confirmButton = {

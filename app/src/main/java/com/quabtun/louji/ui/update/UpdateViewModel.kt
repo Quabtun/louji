@@ -6,6 +6,7 @@ import com.quabtun.louji.AppContainer
 import com.quabtun.louji.BuildConfig
 import com.quabtun.louji.update.UpdateInfo
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
 
     private var startupChecked = false
     private var downloadJob: Job? = null
+    private var downloadGeneration = 0
 
     fun checkOnStartup() {
         if (startupChecked) return
@@ -52,19 +54,28 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
 
     fun download() {
         val info = (_state.value as? UpdateUiState.Available)?.info ?: return
+        val generation = ++downloadGeneration
         downloadJob?.cancel()
         _state.value = UpdateUiState.Downloading(info, 0f)
         downloadJob = viewModelScope.launch {
             try {
                 val file = container.updater.download(info) { progress ->
-                    _state.value = UpdateUiState.Downloading(info, progress)
+                    if (generation == downloadGeneration) {
+                        _state.value = UpdateUiState.Downloading(info, progress)
+                    }
                 }
-                _state.value = UpdateUiState.Ready(info, file)
+                if (generation == downloadGeneration) {
+                    _state.value = UpdateUiState.Ready(info, file)
+                }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Throwable) {
-                _state.value = UpdateUiState.Error(
-                    message = error.message ?: "下载失败，请重试",
-                    manual = true,
-                )
+                if (generation == downloadGeneration) {
+                    _state.value = UpdateUiState.Error(
+                        message = error.message ?: "下载失败，请重试",
+                        manual = true,
+                    )
+                }
             }
         }
     }
@@ -86,10 +97,18 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun openInstallPermissionSettings() {
-        container.updater.openInstallPermissionSettings()
+        try {
+            container.updater.openInstallPermissionSettings()
+        } catch (error: Throwable) {
+            _state.value = UpdateUiState.Error(
+                message = error.message ?: "无法打开系统设置",
+                manual = true,
+            )
+        }
     }
 
     fun dismiss() {
+        downloadGeneration++
         downloadJob?.cancel()
         _state.value = UpdateUiState.Hidden
     }
