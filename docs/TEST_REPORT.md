@@ -12,7 +12,7 @@
 | JVM 单元测试 | 24 / 24 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 18 / 18 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-03T17-55-22.365Z-1a5062a7daa7` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-03T18-13-54.188Z-3ecb6e936023` |
 | Release APK | 已签名，3.9 MB（v1.2.0，versionCode 12） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.1.1 → v1.2.0） | 见第 6 节、`docs/screenshots/update-*.png` |
 
@@ -100,6 +100,7 @@
 | 1.3× 字体 | 通过 | `home-font13.png` |
 | 横屏 / 平板宽度（1600×2560 @240dpi） | 通过 | `home-landscape.png`；内容 760dp 居中，FAB 跟随内容列 |
 | Release APK 安装、建记录、备份导出/导入 | 通过 | R8 后序列化、Room、FileProvider 正常 |
+| v1.2.0 Release 安装、新建记录 | 通过 | 独立模拟器新建 `Release Smoke 1`，保存后详情正常 |
 
 ### 相机说明
 
@@ -116,7 +117,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.2.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-03T17-55-22.365Z-1a5062a7daa7`，seal `sha256:01f313175ad239b0235e3288c188779871060ac5185f1d05600c9cdb175bfd35`。
+- 结果（v1.2.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-03T18-13-54.188Z-3ecb6e936023`，seal `sha256:7a797c22dca41ff624e364083594f14f8c6a471c9cd1c9da67e9991cef52e6e5`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
