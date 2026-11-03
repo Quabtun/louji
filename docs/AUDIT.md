@@ -1,7 +1,7 @@
 # 楼记 · 安全性 / 稳定性 / 可靠性 / 逻辑性审计
 
 日期：2026-11-02
-审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）。v1.1.0（versionCode 10）只调整图标与页面布局；v1.1.1（versionCode 11）修复定位请求与权限处理并移除「有媒体」筛选 chip，不新增第三方定位 SDK 或网络目标；v1.2.0（versionCode 12）新增本地剪贴板订单识别，仅在用户点击时读取剪贴板，不联网、不写日志、不新增权限（24 JVM + 18 instrumentation）。均沿用本报告结论。
+审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）。v1.1.0（versionCode 10）只调整图标与页面布局；v1.1.1（versionCode 11）修复定位请求与权限处理并移除「有媒体」筛选 chip，不新增第三方定位 SDK 或网络目标；v1.2.0（versionCode 12）新增本地剪贴板订单识别，仅在用户点击时读取剪贴板，不联网、不写日志、不新增权限；v1.2.1（versionCode 13）为剪贴板读取异常兜底与 API 26 测试线程修复（24 JVM + 18 instrumentation）。均沿用本报告结论。
 环境：Android Emulator `RiderClimbApi35`，API 35；JDK 17；Gradle 8.5；compileSdk/targetSdk 34
 
 ## 1. 结论摘要

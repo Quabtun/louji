@@ -194,15 +194,17 @@ fun RecordEditScreen(
     }
 
     fun pasteOrder() {
-        val clipboard = context.getSystemService(ClipboardManager::class.java)
-        val clip = clipboard?.primaryClip
-        val text = if (clip != null && clip.itemCount > 0) {
-            clip.getItemAt(0).coerceToText(context)?.toString().orEmpty()
-        } else {
-            ""
-        }
+        val text = runCatching {
+            val clipboard = context.getSystemService(ClipboardManager::class.java)
+            val clip = clipboard?.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                clip.getItemAt(0).coerceToText(context)?.toString().orEmpty()
+            } else {
+                ""
+            }
+        }.getOrDefault("")
         if (text.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar("剪贴板没有文字，先复制订单信息") }
+            scope.launch { snackbarHostState.showSnackbar("剪贴板没有文字或无法读取") }
             return
         }
         val parsed = ClipboardOrderParser.parse(text)

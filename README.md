@@ -4,7 +4,7 @@
 
 <img src="design/icon/louji-512.png" width="96" alt="楼记图标：楼梯尽头的纸色门洞">
 
-> 截图为 v1.2.0 构建；记录均为合成演示数据，不包含真实客户信息。
+> 截图为 v1.2.0 构建，v1.2.1 为稳定性修复；记录均为合成演示数据，不包含真实客户信息。
 
 ## 功能
 
@@ -105,7 +105,7 @@ New-Item -ItemType Junction -Path D:\louji-build -Target 'D:\code\Zcode\爬楼�
 ./gradlew :app:lintDebug
 ```
 
-最近一次结果：24 个 JVM 单元测试通过；18 个仪器化测试通过（API 35，1080×2400）；Lint 0 error；Mimosa 静态深度扫描 0 个发现（证据边界见报告）。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)，安全审计见 [`docs/AUDIT.md`](docs/AUDIT.md)。
+最近一次结果：24 个 JVM 单元测试通过；18 个仪器化测试通过（API 35，1080×2400；API 26 核心建记录与剪贴板流程通过）；Lint 0 error；Mimosa 静态深度扫描 0 个发现（证据边界见报告）。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)，安全审计见 [`docs/AUDIT.md`](docs/AUDIT.md)。
 
 ## 发布更新
 

@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.quabtun.louji.model.MediaDraft
 import com.quabtun.louji.model.MediaType
 import com.quabtun.louji.model.RecordDraft
@@ -177,19 +178,21 @@ class RecordFlowTest {
     @Test
     fun pasteOrderFromClipboardFillsFields() {
         val app = ApplicationProvider.getApplicationContext<LouJiApp>()
-        val clipboard = app.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(
-            ClipData.newPlainText(
-                "order",
-                """
-                订单号：D5566
-                收货地址：江景苑 2 栋
-                楼层：21层
-                房号：2103
-                王女士 尾号 2145
-                """.trimIndent(),
-            ),
-        )
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val clipboard = app.getSystemService(ClipboardManager::class.java)
+            clipboard.setPrimaryClip(
+                ClipData.newPlainText(
+                    "order",
+                    """
+                    订单号：D5566
+                    收货地址：江景苑 2 栋
+                    楼层：21层
+                    房号：2103
+                    王女士 尾号 2145
+                    """.trimIndent(),
+                ),
+            )
+        }
 
         compose.onNodeWithTag("create_record").performClick()
         compose.onNodeWithTag("paste_order").performClick()
