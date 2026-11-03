@@ -1,6 +1,7 @@
 package com.quabtun.louji.ui.edit
 
 import android.Manifest
+import android.content.ClipboardManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -89,7 +90,9 @@ import com.quabtun.louji.ui.components.LouJiFilterChip
 import com.quabtun.louji.ui.components.MediaTile
 import com.quabtun.louji.ui.components.SectionHeader
 import com.quabtun.louji.ui.components.TriStateSelector
+import com.quabtun.louji.util.ClipboardOrderParser
 import com.quabtun.louji.util.LocationHelper
+import com.quabtun.louji.util.ParsedOrder
 import com.quabtun.louji.util.label
 import kotlinx.coroutines.launch
 
@@ -116,6 +119,7 @@ fun RecordEditScreen(
     var cameraVideo by remember { mutableStateOf(false) }
     var locationRequestId by remember { mutableStateOf(0) }
     var isLocating by remember { mutableStateOf(false) }
+    var pendingPaste by remember { mutableStateOf<ParsedOrder?>(null) }
     val formScrollState = rememberScrollState()
 
     LaunchedEffect(recordId, duplicateId) {
@@ -177,6 +181,47 @@ fun RecordEditScreen(
         }
     }
     val hasChanges = viewModel.hasUnsavedChanges()
+
+    fun applyParsedOrder(parsed: ParsedOrder) {
+        parsed.location?.let(viewModel::setLocation)
+        parsed.orderNo?.let(viewModel::setOrderNo)
+        parsed.phoneTail?.let(viewModel::setPhoneTail)
+        parsed.floor?.let(viewModel::setFloor)
+        parsed.roomNo?.let(viewModel::setRoomNo)
+        parsed.gender?.let(viewModel::setGender)
+        val labels = parsed.labels().joinToString("、")
+        scope.launch { snackbarHostState.showSnackbar("已从剪贴板填入：$labels") }
+    }
+
+    fun pasteOrder() {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        val clip = clipboard?.primaryClip
+        val text = if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0).coerceToText(context)?.toString().orEmpty()
+        } else {
+            ""
+        }
+        if (text.isBlank()) {
+            scope.launch { snackbarHostState.showSnackbar("剪贴板没有文字，先复制订单信息") }
+            return
+        }
+        val parsed = ClipboardOrderParser.parse(text)
+        if (parsed.isEmpty) {
+            scope.launch { snackbarHostState.showSnackbar("没识别到订单信息，可手动填写") }
+            return
+        }
+        val hasExisting = ui.draft.location.isNotBlank() ||
+            ui.draft.orderNo.isNotBlank() ||
+            ui.draft.phoneTail.isNotBlank() ||
+            ui.draft.floor.isNotBlank() ||
+            ui.draft.roomNo.isNotBlank() ||
+            ui.draft.gender != Gender.UNKNOWN
+        if (hasExisting) {
+            pendingPaste = parsed
+        } else {
+            applyParsedOrder(parsed)
+        }
+    }
 
     if (showCamera) {
         CameraCaptureScreen(
@@ -309,7 +354,18 @@ fun RecordEditScreen(
                     )
                     Spacer(Modifier.height(20.dp))
                     SectionHeader("订单")
-                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(
+                            onClick = { pasteOrder() },
+                            modifier = Modifier.testTag("paste_order"),
+                        ) {
+                            Text("从剪贴板填入", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
                     OutlinedTextField(
                         value = ui.draft.location,
                         onValueChange = viewModel::setLocation,
@@ -681,6 +737,27 @@ fun RecordEditScreen(
                 onBack()
             },
             onDismiss = { showDiscardDialog = false },
+        )
+    }
+
+    pendingPaste?.let { parsed ->
+        AlertDialog(
+            onDismissRequest = { pendingPaste = null },
+            title = { Text("用剪贴板填入？") },
+            text = {
+                Text("会覆盖已填写的对应字段：\n\n${parsed.summary()}")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingPaste = null
+                        applyParsedOrder(parsed)
+                    },
+                ) { Text("填入") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPaste = null }) { Text("取消") }
+            },
         )
     }
 

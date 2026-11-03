@@ -1,7 +1,7 @@
 # 楼记 · 安全性 / 稳定性 / 可靠性 / 逻辑性审计
 
 日期：2026-11-02
-审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）。v1.1.0（versionCode 10）只调整图标与页面布局；v1.1.1（versionCode 11）修复定位请求与权限处理并移除「有媒体」筛选 chip，不新增第三方定位 SDK 或网络目标，沿用本报告结论。
+审计对象：楼记 v1.0.7（versionCode 8）及 v1.0.8 修复（versionCode 9，提交 `26ef529`）。v1.1.0（versionCode 10）只调整图标与页面布局；v1.1.1（versionCode 11）修复定位请求与权限处理并移除「有媒体」筛选 chip，不新增第三方定位 SDK 或网络目标；v1.2.0（versionCode 12）新增本地剪贴板订单识别，仅在用户点击时读取剪贴板，不联网、不写日志、不新增权限。均沿用本报告结论。
 环境：Android Emulator `RiderClimbApi35`，API 35；JDK 17；Gradle 8.5；compileSdk/targetSdk 34
 
 ## 1. 结论摘要
@@ -36,6 +36,7 @@
 | 系统备份 / 云同步 | 通过 | `allowBackup=false`，backup rules 排除 root/file/database/sharedpref/external |
 | 导出数据敏感性 | 部分通过 | zip 未加密，设置页和 README 已明确提示包含客户信息，需用户自行保管 |
 | 隐私文案准确性 | 通过（已修） | 原文声称联网仅更新，但“使用当前位置”可能调用系统地理编码；v1.0.8 已补充说明 |
+| 剪贴板读取 | 通过 | 仅用户点击「从剪贴板填入」时读取；本地正则解析、不写日志、不联网、无新增权限；覆盖已有字段前确认 |
 | 硬编码密钥 / Token | 通过 | 源码只读取 BuildConfig 的 GitHub 仓库地址，无密钥 |
 
 ### 2.2 稳定性

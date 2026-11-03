@@ -1,9 +1,13 @@
 package com.quabtun.louji
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -168,6 +172,36 @@ class RecordFlowTest {
             compose.onAllNodesWithTag("order_zoom").fetchSemanticsNodes().isEmpty()
         }
         compose.onNodeWithTag("order_thumb_$recordId").assertIsDisplayed()
+    }
+
+    @Test
+    fun pasteOrderFromClipboardFillsFields() {
+        val app = ApplicationProvider.getApplicationContext<LouJiApp>()
+        val clipboard = app.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(
+                "order",
+                """
+                订单号：D5566
+                收货地址：江景苑 2 栋
+                楼层：21层
+                房号：2103
+                王女士 尾号 2145
+                """.trimIndent(),
+            ),
+        )
+
+        compose.onNodeWithTag("create_record").performClick()
+        compose.onNodeWithTag("paste_order").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("江景苑 2 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("field_location").assertTextContains("江景苑 2 栋")
+        compose.onNodeWithTag("field_order").assertTextContains("D5566")
+        compose.onNodeWithTag("field_tail").assertTextContains("2145")
+        compose.onNodeWithTag("field_floor").assertTextContains("21")
+        compose.onNodeWithTag("field_room").assertTextContains("2103")
+        compose.onNodeWithTag("gender_FEMALE").assertIsSelected()
     }
 
     @Test
