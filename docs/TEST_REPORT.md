@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.13.0
+版本：1.14.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,12 +9,12 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 43 / 43 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 38 / 38 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 45 / 45 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 39 / 39 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26） | DAO + 迁移 + 备份加密 22 / 22 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T19-12-46.410Z-73f212515b4c` |
-| Release APK | 已签名（v1.13.0，versionCode 24） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T19-29-58.061Z-adad6440d3d0` |
+| Release APK | 已签名（v1.14.0，versionCode 25） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -38,10 +38,11 @@
 - `DateRangePresetsTest`：滚动窗口起始、空范围判定、UTC→本地自然日换算、跨时区对齐、次日边界。
 - `DeleteUndoControllerTest`：announce/consume 循环、重复删除 nonce 递增。
 - `RecordMergerTest`：订单号优先/位置兜底的重复键、位置-only 不可合并、重复分组、字段合并（标签并集/补空/UNKNOWN 升级）。
+- `DiagnosticLogSanitizeTest`：日志消息去换行/回车（防日志注入），普通文本不变。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 43 / 43 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 45 / 45 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（38，API 35 模拟器）
+## 3. 仪器化测试（39，API 35 模拟器）
 
 命令：
 
@@ -84,6 +85,8 @@
   - 首次启动展示引导页，点「开始使用」进入主列表；`onboardingSeen` 置位后重启跳过引导。
 - `AccessibilitySemanticsTest`
   - 列表 FAB/设置/搜索框内容描述、状态印章文本朗读、筛选 chip、设置页返回/导出/合并重复标签。
+- `DiagnosticLogInstrumentedTest`
+  - 日志往返（app_start/备份事件）、消息换行被替换、崩溃异常类名+信息捕获。
   - 编辑位置后保存，详情更新。
   - 条目默认进入「现场」媒体页；无附件时显示空状态；顶部「详细信息」进入完整详情。
   - 独立「备注」写入、详情展示、列表单行摘要、搜索命中。
@@ -223,6 +226,7 @@
 - v1.10.0 → v1.11.0 覆盖安装成功；本版本新增重复记录合并，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.11.0 → v1.12.0 覆盖安装成功；本版本新增图片缩略图预生成，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.12.0 → v1.13.0 覆盖安装成功；本版本新增可访问性语义（搜索框可访问名 + 语义测试），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.13.0 → v1.14.0 覆盖安装成功；本版本新增本地脱敏诊断日志与导出，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
