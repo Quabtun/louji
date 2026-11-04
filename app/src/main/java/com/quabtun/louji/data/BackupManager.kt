@@ -263,17 +263,10 @@ class BackupManager(
                             target.delete()
                             return@mapNotNull null
                         }
-                        val draft = when (type) {
-                            MediaType.VIDEO -> mediaStore.completeVideo(target)
-                            MediaType.IMAGE -> MediaDraft(
-                                type = MediaType.IMAGE,
-                                filePath = target.absolutePath,
-                                thumbPath = null,
-                                mimeType = mime,
-                                sizeBytes = target.length(),
-                                durationMs = 0,
-                            )
-                        }
+                            val draft = when (type) {
+                                MediaType.VIDEO -> mediaStore.completeVideo(target)
+                                MediaType.IMAGE -> mediaStore.completeImage(target, mime)
+                            }
                         copiedMedia += draft
                         draft to item.createdAt
                     },

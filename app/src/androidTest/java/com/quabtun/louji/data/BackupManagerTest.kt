@@ -259,6 +259,36 @@ class BackupManagerTest {
 
     private fun testPassword(label: String): String = "test-backup-$label"
 
+    @Test
+    fun importedImageGetsThumbnail() = runBlocking {
+        val image = File(root, "source.png")
+        val bitmap = android.graphics.Bitmap.createBitmap(600, 400, android.graphics.Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(android.graphics.Color.rgb(255, 200, 61))
+        java.io.FileOutputStream(image).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        repositoryA.save(
+            draft = RecordDraft(location = "缩略图", orderNo = "T1"),
+            recordId = null,
+            pendingMedia = listOf(
+                MediaDraft(
+                    type = MediaType.IMAGE,
+                    filePath = image.absolutePath,
+                    thumbPath = null,
+                    mimeType = "image/png",
+                    sizeBytes = image.length(),
+                    durationMs = 0,
+                ),
+            ),
+        )
+        val zip = File(root, "thumb.zip")
+        backupA.exportBackup(Uri.fromFile(zip))
+        backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE)
+
+        val imported = repositoryB.allRecords().single().attachments.single()
+        assertTrue(imported.thumbPath != null)
+        assertTrue(File(imported.thumbPath!!).isFile)
+    }
+
     private companion object {
         const val ONE_PIXEL_PNG =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z3GQAAAAASUVORK5CYII="

@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.webkit.MimeTypeMap
+import androidx.exifinterface.media.ExifInterface
 import com.quabtun.louji.model.MediaDraft
 import com.quabtun.louji.model.MediaType
 import java.io.File
@@ -68,7 +69,10 @@ class LocalMediaStore(
             throw error
         }
 
-        val thumbnail = if (type == MediaType.VIDEO) createVideoThumbnail(target) else null
+        val thumbnail = when (type) {
+            MediaType.VIDEO -> createVideoThumbnail(target)
+            MediaType.IMAGE -> createImageThumbnail(target)
+        }
         MediaDraft(
             type = type,
             filePath = target.absolutePath,
@@ -79,11 +83,13 @@ class LocalMediaStore(
         )
     }
 
-    fun completePhoto(file: File): MediaDraft = MediaDraft(
+    fun completePhoto(file: File): MediaDraft = completeImage(file, "image/jpeg")
+
+    fun completeImage(file: File, mimeType: String): MediaDraft = MediaDraft(
         type = MediaType.IMAGE,
         filePath = file.absolutePath,
-        thumbPath = null,
-        mimeType = "image/jpeg",
+        thumbPath = createImageThumbnail(file),
+        mimeType = mimeType,
         sizeBytes = file.length(),
         durationMs = 0L,
     )
@@ -199,6 +205,49 @@ class LocalMediaStore(
         } finally {
             runCatching { retriever.release() }
         }
+    }
+
+    private fun createImageThumbnail(image: File): String? {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(image.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            val maxDimension = maxOf(bounds.outWidth, bounds.outHeight)
+            var sample = 1
+            while (maxDimension / (sample * 2) >= 512) sample *= 2
+            val options = BitmapFactory.Options().apply { inSampleSize = sample }
+            val bitmap = BitmapFactory.decodeFile(image.absolutePath, options) ?: return null
+            val rotated = rotateImage(bitmap, image)
+            val target = File(thumbsRoot, "${UUID.randomUUID()}.jpg")
+            FileOutputStream(target).use { output ->
+                rotated.compress(Bitmap.CompressFormat.JPEG, 84, output)
+            }
+            rotated.recycle()
+            target.absolutePath
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun rotateImage(bitmap: Bitmap, source: File): Bitmap {
+        val orientation = try {
+            ExifInterface(source.absolutePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+        } catch (_: Throwable) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+        val degrees = when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+        if (degrees == 0f) return bitmap
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            .also { if (it !== bitmap) bitmap.recycle() }
     }
 
     private fun readDuration(video: File): Long {
