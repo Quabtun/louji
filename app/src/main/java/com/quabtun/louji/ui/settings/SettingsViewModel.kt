@@ -44,6 +44,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.setAutoCheckUpdates(enabled) }
     }
 
+    fun setAppLockEnabled(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setAppLockEnabled(enabled) }
+    }
+
     fun refreshStorage() {
         viewModelScope.launch {
             _storage.value = container.mediaStore.storageUsage()

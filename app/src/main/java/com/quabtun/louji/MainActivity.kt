@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -38,6 +39,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.quabtun.louji.data.AppSettings
 import com.quabtun.louji.ui.AppViewModelFactory
+import com.quabtun.louji.ui.lock.AppLockScreen
 import com.quabtun.louji.ui.detail.RecordDetailScreen
 import com.quabtun.louji.ui.detail.RecordDetailViewModel
 import com.quabtun.louji.ui.edit.RecordEditScreen
@@ -104,6 +106,14 @@ private fun LouJiRoot(container: AppContainer) {
     }
 
     LouJiTheme(themeMode = settings.themeMode) {
+        val lockState by container.lock.state.collectAsStateWithLifecycle()
+        if (!lockState.ready) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (lockState.locked) {
+            AppLockScreen(onUnlocked = container.lock::unlock)
+        } else {
         val navController = rememberNavController()
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
@@ -249,6 +259,7 @@ private fun LouJiRoot(container: AppContainer) {
                 onOpenInstallSettings = updateViewModel::openInstallPermissionSettings,
             )
             else -> Unit
+        }
         }
     }
 }

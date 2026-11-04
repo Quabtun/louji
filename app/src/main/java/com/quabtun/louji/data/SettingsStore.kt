@@ -22,6 +22,7 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheck: Long = 0L,
+    val appLockEnabled: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -37,6 +38,7 @@ class SettingsStore(private val context: Context) {
                 },
                 autoCheckUpdates = preferences[AUTO_CHECK_UPDATES] ?: true,
                 lastUpdateCheck = preferences[LAST_UPDATE_CHECK] ?: 0L,
+                appLockEnabled = preferences[APP_LOCK_ENABLED] ?: false,
             )
         }
 
@@ -52,9 +54,14 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[LAST_UPDATE_CHECK] = timestamp }
     }
 
+    suspend fun setAppLockEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[APP_LOCK_ENABLED] = enabled }
+    }
+
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
+        val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
     }
 }

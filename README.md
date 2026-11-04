@@ -4,7 +4,7 @@
 
 <img src="design/icon/louji-512.png" width="96" alt="楼记图标：楼梯尽头的纸色门洞">
 
-> 截图为 v1.2.0 构建，v1.2.1 为稳定性修复；记录均为合成演示数据，不包含真实客户信息。
+> 截图为 v1.2.0 构建，v1.2.1 / v1.3.0 为后续修复与新增；记录均为合成演示数据，不包含真实客户信息。
 
 ## 功能
 
@@ -20,7 +20,7 @@
 - **本机备份**：导出 zip（记录 + 全部附件），导入时可选合并或覆盖。
 - **GitHub 更新**：检查最新 Release、下载 APK、校验 SHA-256、交给系统安装器；启动时最多每 24 小时自动检查一次。
 - **深浅色 / 大字体**：Material 3 结构，浅色与深色都是一等公民；支持 1.3× 字体缩放和横屏 / 平板宽度。
-- **隐私**：无账号、无统计 SDK、无广告；`allowBackup=false`，媒体存应用私有目录。联网用于检查更新；点「使用当前位置」时，系统定位/地理编码服务可能用坐标解析地址。
+- **隐私**：无账号、无统计 SDK、无广告；`allowBackup=false`，媒体存应用私有目录。可选「应用锁」，离开应用后需系统锁屏密码/指纹解锁。联网用于检查更新；点「使用当前位置」时，系统定位/地理编码服务可能用坐标解析地址。
 
 ## 截图
 
@@ -105,7 +105,7 @@ New-Item -ItemType Junction -Path D:\louji-build -Target 'D:\code\Zcode\爬楼�
 ./gradlew :app:lintDebug
 ```
 
-最近一次结果：24 个 JVM 单元测试通过；18 个仪器化测试通过（API 35，1080×2400；API 26 核心建记录与剪贴板流程通过）；Lint 0 error；Mimosa 静态深度扫描 0 个发现（证据边界见报告）。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)，安全审计见 [`docs/AUDIT.md`](docs/AUDIT.md)，质量与演进诊断见 [`docs/QUALITY_DIAGNOSIS.md`](docs/QUALITY_DIAGNOSIS.md)。
+最近一次结果：28 个 JVM 单元测试通过；18 个仪器化测试通过（API 35，1080×2400；API 26 核心建记录与剪贴板流程通过）；Lint 0 error；Mimosa 静态深度扫描 0 个发现（证据边界见报告）。完整用例、证据与已知限制见 [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md)，安全审计见 [`docs/AUDIT.md`](docs/AUDIT.md)，质量与演进诊断见 [`docs/QUALITY_DIAGNOSIS.md`](docs/QUALITY_DIAGNOSIS.md)。
 
 ## 发布更新
 

@@ -1,6 +1,9 @@
 package com.quabtun.louji.ui.settings
 
+import android.app.Activity
+import android.app.KeyguardManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -50,10 +53,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -72,6 +77,7 @@ import com.quabtun.louji.ui.update.UpdateUiState
 import com.quabtun.louji.ui.update.UpdateViewModel
 import com.quabtun.louji.util.backupFileName
 import com.quabtun.louji.util.formatBytes
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -86,7 +92,10 @@ fun SettingsScreen(
     val backup by viewModel.backup.collectAsStateWithLifecycle()
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
+    var lockDesired by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -101,6 +110,35 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) pendingImportUri = uri
+    }
+    val lockConfirmLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.setAppLockEnabled(lockDesired)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    fun toggleAppLock() {
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        if (keyguard == null || !keyguard.isKeyguardSecure) {
+            scope.launch { snackbarHostState.showSnackbar("请先在系统设置中开启锁屏密码或指纹") }
+            return
+        }
+        lockDesired = !settings.appLockEnabled
+        val title = if (lockDesired) "开启应用锁" else "关闭应用锁"
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            keyguard.createConfirmDeviceCredentialIntent(title, "请验证系统锁屏以继续")
+        } else {
+            @Suppress("DEPRECATION")
+            keyguard.createConfirmDeviceCredentialIntent(title, null)
+        }
+        if (intent != null) {
+            runCatching { lockConfirmLauncher.launch(intent) }.onFailure {
+                scope.launch { snackbarHostState.showSnackbar("无法启动系统验证，请重试") }
+            }
+        }
     }
 
     LaunchedEffect(backup.message) {
@@ -156,6 +194,26 @@ fun SettingsScreen(
                         ThemeMode.DARK -> "深色"
                     },
                     onClick = { showThemeDialog = true },
+                )
+
+                Spacer(Modifier.height(22.dp))
+                SectionHeader("隐私")
+                Spacer(Modifier.height(8.dp))
+                ListItem(
+                    headlineContent = { Text("应用锁") },
+                    supportingContent = { Text("离开应用后自动锁定，需系统锁屏密码或指纹") },
+                    trailingContent = {
+                        Switch(
+                            checked = settings.appLockEnabled,
+                            onCheckedChange = { toggleAppLock() },
+                            modifier = Modifier.testTag("app_lock_switch"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    },
                 )
 
                 Spacer(Modifier.height(22.dp))
