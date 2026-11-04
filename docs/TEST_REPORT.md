@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.17.0
+版本：1.18.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -13,8 +13,9 @@
 | 仪器化测试（API 35） | 40 / 40 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26） | DAO + 迁移 + 备份加密 23 / 23 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-04T20-41-18.613Z-5a582359715e` |
-| Release APK | 已签名（v1.17.0，versionCode 28） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-04T21-14-08.864Z-f56c62a7edc3` |
+| 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
+| Release APK | 已签名（v1.18.0，versionCode 29） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -140,6 +141,8 @@
 | 日期自定义范围 DatePicker | 通过 | 「自定义范围」→ 系统日期选择器正常弹出（无崩溃）；`date-filter-custom-picker.png` |
 | 删除撤销 Snackbar（release 实机） | 通过 | 详情「移到回收站」→ 列表弹「已移入回收站 / 撤销」，撤销按钮上移避开 FAB；`delete-undo-snackbar.png` |
 | 首次引导（release 实机） | 通过 | 升级后首次打开显示权限说明页；「开始使用」进列表；重启跳过引导；`onboarding.png` |
+| TalkBack 走查（列表/详情/表单） | 通过 | 模拟器启用 TalkBack，无障碍树核对内容描述与状态朗读；见 `docs/ACCESSIBILITY.md` |
+| 2.0× 字体 | 通过 | 列表/详情/表单可滚动、无横向裁剪；`详细信息`/时间戳经滚动可见 |
 | 批量归档（release 实机） | 通过 | 多选 → 勾选记录 → 归档 → 活跃空、已归档可见；`batch-selection.png` |
 | 合并重复入口（release 实机） | 通过 | 设置 → 合并重复记录 → 弹预览对话框（无重复时提示「没有发现重复记录」）；合并逻辑由 `mergeDuplicatesFlow` 仪器化测试覆盖 |
 
@@ -233,6 +236,7 @@
 - v1.14.0 → v1.15.0 覆盖安装成功；本版本新增每周备份提醒，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.15.0 → v1.16.0 覆盖安装成功；本版本新增订单截图 OCR（本地原型，ML Kit 拉丁/数字模型），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.16.0 → v1.17.0 覆盖安装成功；本版本新增列表分页（Paging 3），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.17.0 → v1.18.0 覆盖安装成功；本版本完成可访问性 TalkBack 走查与 2.0× 字体验证并修复时间戳溢出，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
@@ -251,6 +255,7 @@
 - `docs/screenshots/delete-undo-snackbar.png`
 - `docs/screenshots/onboarding.png`
 - `docs/screenshots/batch-selection.png`
+- `docs/ACCESSIBILITY.md`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
