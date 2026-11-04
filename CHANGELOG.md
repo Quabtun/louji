@@ -1,5 +1,15 @@
 # 变更记录
 
+## v1.8.0 — 2026-11-05
+
+P2 删除撤销（Snackbar）。
+
+- 「移到回收站」后列表底部弹 Snackbar「已移入回收站」+「撤销」，点撤销即恢复，不用再进回收站。
+- 撤销状态由 `AppContainer` 共享的 `DeleteUndoController` 在详情与列表 ViewModel 间传递，带 nonce 保证重复删除也会重新弹。
+- Snackbar 上移避开右下角「记一单」FAB，不再遮挡；undo 状态在测试清理时也会复位。
+- 新增 `DeleteUndoController` JVM 测试与 Compose「撤销恢复」测试；JVM 测试增至 38 项、API 35 仪器化增至 29 项、API 26 核心保持 19 项。
+- 无数据库结构变化。
+
 ## v1.7.0 — 2026-11-05
 
 P2 高级筛选：日期范围过滤。
