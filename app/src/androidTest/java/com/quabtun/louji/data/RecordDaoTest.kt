@@ -129,6 +129,33 @@ class RecordDaoTest {
         assertEquals(setOf("A", "B"), locations.toSet())
     }
 
+    @Test
+    fun trashHidesFromActiveListAndIsObservableAndRestorable() = runBlocking {
+        val activeId = recordDao.insert(record("活跃", "1"))
+        val trashedId = recordDao.insert(record("回收", "2"))
+        recordDao.setDeletedAt(trashedId, 1000L)
+
+        assertEquals(1, recordDao.observeFiltered("", "ALL", 0).first().size)
+        assertEquals("活跃", recordDao.observeFiltered("", "ALL", 0).first().single().record.location)
+
+        val trashed = recordDao.observeTrashed().first()
+        assertEquals(1, trashed.size)
+        assertEquals("回收", trashed.single().record.location)
+
+        // Trashed records are excluded from stats and recent-location suggestions.
+        assertEquals(1, recordDao.observeStats(0).first().total)
+        assertEquals(listOf("活跃"), recordDao.observeRecentLocations().first())
+
+        // Purge query returns only records deleted at or before the cutoff.
+        assertEquals(1, recordDao.getTrashedBefore(2000L).size)
+        assertEquals(0, recordDao.getTrashedBefore(500L).size)
+
+        recordDao.setDeletedAt(trashedId, 0L)
+        assertEquals(2, recordDao.observeFiltered("", "ALL", 0).first().size)
+        assertEquals(0, recordDao.observeTrashed().first().size)
+        assertTrue(activeId > 0)
+    }
+
     private fun record(
         location: String,
         orderNo: String,

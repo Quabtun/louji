@@ -10,6 +10,7 @@ import com.quabtun.louji.model.RecordSorter
 import com.quabtun.louji.model.RecordStats
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,21 +32,38 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
     private val _showArchived = MutableStateFlow(false)
     val showArchived: StateFlow<Boolean> = _showArchived.asStateFlow()
 
+    private val _showTrash = MutableStateFlow(false)
+    val showTrash: StateFlow<Boolean> = _showTrash.asStateFlow()
+
     private val _sort = MutableStateFlow(RecordSort.UPDATED)
     val sort: StateFlow<RecordSort> = _sort.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    val records: StateFlow<List<RecordWithAttachments>> = combine(
+    private val rawRecords: Flow<List<RecordWithAttachments>> = combine(
         _query.debounce(220),
         _filter,
         _showArchived,
-    ) { query, filter, showArchived -> Triple(query, filter, showArchived) }
-        .flatMapLatest { (query, filter, showArchived) ->
-            repository.observeRecords(query, filter, showArchived)
+        _showTrash,
+    ) { query, filter, showArchived, showTrash ->
+        RecordsRequest(query, filter, showArchived, showTrash)
+    }
+        .flatMapLatest { (query, filter, showArchived, showTrash) ->
+            if (showTrash) {
+                repository.observeTrashed()
+            } else {
+                repository.observeRecords(query, filter, showArchived)
+            }
         }
-        .combine(_sort) { records, sort -> RecordSorter.sort(records, sort) }
+
+    val records: StateFlow<List<RecordWithAttachments>> = combine(
+        rawRecords,
+        _sort,
+        _showTrash,
+    ) { records, sort, showTrash ->
+        if (showTrash) records else RecordSorter.sort(records, sort)
+    }
         .onEach { _isLoading.value = false }
         .stateIn(
             scope = viewModelScope,
@@ -69,9 +87,22 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
 
     fun setShowArchived(value: Boolean) {
         _showArchived.value = value
+        _showTrash.value = false
+    }
+
+    fun setShowTrash(value: Boolean) {
+        _showTrash.value = value
+        _showArchived.value = false
     }
 
     fun setSort(value: RecordSort) {
         _sort.value = value
     }
+
+    private data class RecordsRequest(
+        val query: String,
+        val filter: RecordFilter,
+        val showArchived: Boolean,
+        val showTrash: Boolean,
+    )
 }

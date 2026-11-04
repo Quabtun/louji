@@ -87,6 +87,39 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate4To5KeepsRecordAndDefaultsNotDeleted() {
+        helper.createDatabase(TEST_DB, 4).apply {
+            execSQL(
+                """
+                INSERT INTO records (
+                    location, orderNo, gender, phoneTail, floor, roomNo,
+                    doorIntact, canOpenFromAbove, noStairs, willComeDown,
+                    personalityTags, personalityNote, remark, climbNote, archived, createdAt, updatedAt
+                ) VALUES (
+                    '云顶小区', 'A1', 'FEMALE', '4821', '30', '3001',
+                    'YES', 'NO', 'NO', 'YES',
+                    '[]', '', '门禁在左手边', '客户要送上门', 1, 1, 1
+                )
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val database = helper.runMigrationsAndValidate(
+            TEST_DB,
+            5,
+            true,
+            LouJiDatabase.MIGRATION_4_5,
+        )
+        database.query("SELECT location, archived, deletedAt FROM records").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("云顶小区", cursor.getString(0))
+            assertEquals(1, cursor.getInt(1))
+            assertEquals(0, cursor.getInt(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "louji-migration-test.db"
     }

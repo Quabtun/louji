@@ -118,11 +118,11 @@ fun RecordListScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val showArchived by viewModel.showArchived.collectAsStateWithLifecycle()
+    val showTrash by viewModel.showTrash.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     var zoomedImage by remember { mutableStateOf<String?>(null) }
-    var sortMenu by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
@@ -190,27 +190,43 @@ fun RecordListScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                item { StatsStrip(stats) }
-                item {
-                    SearchField(
-                        query = query,
-                        onQueryChange = viewModel::setQuery,
-                        focusManager = focusManager,
-                    )
+                if (!showTrash) {
+                    item { StatsStrip(stats) }
+                    item {
+                        SearchField(
+                            query = query,
+                            onQueryChange = viewModel::setQuery,
+                            focusManager = focusManager,
+                        )
+                    }
+                    item {
+                        FilterRow(
+                            selected = filter,
+                            onSelect = viewModel::setFilter,
+                        )
+                    }
                 }
                 item {
-                    FilterRow(
-                        selected = filter,
-                        onSelect = viewModel::setFilter,
-                    )
-                }
-                item {
-                    ArchiveSortRow(
+                    ViewSwitcherRow(
                         showArchived = showArchived,
+                        showTrash = showTrash,
                         onShowArchivedChange = viewModel::setShowArchived,
+                        onShowTrashChange = viewModel::setShowTrash,
                         sort = sort,
                         onSortChange = viewModel::setSort,
                     )
+                }
+                if (showTrash) {
+                    item {
+                        Text(
+                            text = "回收站里的记录会保留 7 天，之后自动彻底删除。",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 if (records.isEmpty() && isLoading) {
                     item {
@@ -225,37 +241,44 @@ fun RecordListScreen(
                     }
                 } else if (records.isEmpty()) {
                     item {
-                        val clearFilters = {
-                            viewModel.setQuery("")
-                            viewModel.setFilter(RecordFilter.ALL)
-                            focusManager.clearFocus()
-                        }
-                        EmptyState(
-                            title = if (query.isBlank() && filter == RecordFilter.ALL) {
-                                "还没有记录"
-                            } else {
-                                "没有匹配的记录"
-                            },
-                            body = if (query.isBlank() && filter == RecordFilter.ALL) {
-                                "记下第一单，下次到楼下就知道要不要爬、会不会下来拿。"
-                            } else {
-                                "换个关键词，或把筛选切回全部。"
-                            },
-                            action = {
-                                if (query.isBlank() && filter == RecordFilter.ALL) {
-                                    FilledTonalButton(
-                                        onClick = onCreate,
-                                        shape = RoundedCornerShape(12.dp),
-                                    ) {
-                                        Text("记下第一单")
-                                    }
+                        if (showTrash) {
+                            EmptyState(
+                                title = "回收站是空的",
+                                body = "删除的记录会在这里保留 7 天，之后自动彻底删除。",
+                            )
+                        } else {
+                            val clearFilters = {
+                                viewModel.setQuery("")
+                                viewModel.setFilter(RecordFilter.ALL)
+                                focusManager.clearFocus()
+                            }
+                            EmptyState(
+                                title = if (query.isBlank() && filter == RecordFilter.ALL) {
+                                    "还没有记录"
                                 } else {
-                                    TextButton(onClick = clearFilters) {
-                                        Text("清除搜索和筛选")
+                                    "没有匹配的记录"
+                                },
+                                body = if (query.isBlank() && filter == RecordFilter.ALL) {
+                                    "记下第一单，下次到楼下就知道要不要爬、会不会下来拿。"
+                                } else {
+                                    "换个关键词，或把筛选切回全部。"
+                                },
+                                action = {
+                                    if (query.isBlank() && filter == RecordFilter.ALL) {
+                                        FilledTonalButton(
+                                            onClick = onCreate,
+                                            shape = RoundedCornerShape(12.dp),
+                                        ) {
+                                            Text("记下第一单")
+                                        }
+                                    } else {
+                                        TextButton(onClick = clearFilters) {
+                                            Text("清除搜索和筛选")
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 } else {
                     items(records, key = { it.record.id }) { record ->
@@ -391,9 +414,11 @@ private fun FilterRow(selected: RecordFilter, onSelect: (RecordFilter) -> Unit) 
 }
 
 @Composable
-private fun ArchiveSortRow(
+private fun ViewSwitcherRow(
     showArchived: Boolean,
+    showTrash: Boolean,
     onShowArchivedChange: (Boolean) -> Unit,
+    onShowTrashChange: (Boolean) -> Unit,
     sort: RecordSort,
     onSortChange: (RecordSort) -> Unit,
 ) {
@@ -403,7 +428,7 @@ private fun ArchiveSortRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         LouJiFilterChip(
-            selected = !showArchived,
+            selected = !showArchived && !showTrash,
             onClick = { onShowArchivedChange(false) },
             label = { Text("活跃") },
             modifier = Modifier.testTag("view_active"),
@@ -415,33 +440,42 @@ private fun ArchiveSortRow(
             label = { Text("已归档") },
             modifier = Modifier.testTag("view_archived"),
         )
+        Spacer(Modifier.width(8.dp))
+        LouJiFilterChip(
+            selected = showTrash,
+            onClick = { onShowTrashChange(true) },
+            label = { Text("回收站") },
+            modifier = Modifier.testTag("view_trash"),
+        )
         Spacer(Modifier.weight(1f))
-        Box {
-            TextButton(
-                onClick = { menuExpanded = true },
-                modifier = Modifier.testTag("sort_menu"),
-            ) {
-                Text(
-                    text = "排序：${sortLabel(sort)}",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                listOf(
-                    RecordSort.UPDATED to "最近更新",
-                    RecordSort.FLOOR to "楼层",
-                    RecordSort.LOCATION to "位置",
-                ).forEach { (value, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = {
-                            menuExpanded = false
-                            onSortChange(value)
-                        },
+        if (!showTrash) {
+            Box {
+                TextButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.testTag("sort_menu"),
+                ) {
+                    Text(
+                        text = "排序：${sortLabel(sort)}",
+                        style = MaterialTheme.typography.labelMedium,
                     )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    listOf(
+                        RecordSort.UPDATED to "最近更新",
+                        RecordSort.FLOOR to "楼层",
+                        RecordSort.LOCATION to "位置",
+                    ).forEach { (value, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                menuExpanded = false
+                                onSortChange(value)
+                            },
+                        )
+                    }
                 }
             }
         }

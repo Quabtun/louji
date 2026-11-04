@@ -37,10 +37,15 @@ interface RecordDao {
             OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
         )
         AND archived = :archived
+        AND deletedAt = 0
         ORDER BY createdAt DESC
         """,
     )
     fun observeFiltered(query: String, filter: String, archived: Int): Flow<List<RecordWithAttachments>>
+
+    @Transaction
+    @Query("SELECT * FROM records WHERE deletedAt > 0 ORDER BY deletedAt DESC")
+    fun observeTrashed(): Flow<List<RecordWithAttachments>>
 
     @Transaction
     @Query("SELECT * FROM records WHERE id = :id")
@@ -60,7 +65,7 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
             COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown
         FROM records
-        WHERE createdAt >= :since AND archived = 0
+        WHERE createdAt >= :since AND archived = 0 AND deletedAt = 0
         """,
     )
     fun observeStats(since: Long): Flow<RecordStats>
@@ -68,7 +73,7 @@ interface RecordDao {
     @Query(
         """
         SELECT location FROM records
-        WHERE location != ''
+        WHERE location != '' AND deletedAt = 0
         GROUP BY location
         ORDER BY MAX(updatedAt) DESC
         LIMIT 12
@@ -92,6 +97,13 @@ interface RecordDao {
 
     @Query("UPDATE records SET archived = :archived WHERE id = :id")
     suspend fun setArchived(id: Long, archived: Boolean)
+
+    @Query("UPDATE records SET deletedAt = :deletedAt WHERE id = :id")
+    suspend fun setDeletedAt(id: Long, deletedAt: Long)
+
+    @Transaction
+    @Query("SELECT * FROM records WHERE deletedAt > 0 AND deletedAt <= :cutoff")
+    suspend fun getTrashedBefore(cutoff: Long): List<RecordWithAttachments>
 
     @Query("DELETE FROM records WHERE id = :id")
     suspend fun deleteById(id: Long)

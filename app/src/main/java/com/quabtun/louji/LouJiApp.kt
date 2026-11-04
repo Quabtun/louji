@@ -25,6 +25,9 @@ class LouJiApp : Application() {
                     minAgeMs = 5 * 60 * 1000L,
                 )
             }
+            runCatching {
+                container.repository.purgeTrashed(7 * 24 * 60 * 60 * 1000L)
+            }
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {

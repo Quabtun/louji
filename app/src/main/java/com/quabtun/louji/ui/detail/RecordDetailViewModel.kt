@@ -32,6 +32,30 @@ class RecordDetailViewModel(private val repository: RecordRepository) : ViewMode
         }
     }
 
+    fun trash(onTrashed: () -> Unit) {
+        val id = recordId.value ?: return
+        viewModelScope.launch {
+            repository.softDelete(id)
+            onTrashed()
+        }
+    }
+
+    fun restore(onRestored: () -> Unit) {
+        val id = recordId.value ?: return
+        viewModelScope.launch {
+            repository.restore(id)
+            onRestored()
+        }
+    }
+
+    fun purge(onPurged: () -> Unit) {
+        val id = recordId.value ?: return
+        viewModelScope.launch {
+            repository.deleteRecord(id)
+            onPurged()
+        }
+    }
+
     fun setArchived(archived: Boolean) {
         val id = recordId.value ?: return
         viewModelScope.launch { repository.setArchived(id, archived) }

@@ -36,6 +36,7 @@ data class RecordEntity(
     val remark: String = "",
     val climbNote: String = "",
     val archived: Boolean = false,
+    val deletedAt: Long = 0,
 )
 
 @Entity(

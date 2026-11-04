@@ -106,8 +106,8 @@ class RecordFlowTest {
         waitForDetail()
 
         compose.onNodeWithContentDescription("更多").performClick()
-        compose.onNodeWithText("删除记录").performClick()
-        compose.onNodeWithText("删除").performClick()
+        compose.onNodeWithText("移到回收站").performClick()
+        compose.onNodeWithText("移到回收站").performClick()
         compose.waitUntil(8_000) {
             compose.onAllNodesWithText("还没有记录").fetchSemanticsNodes().isNotEmpty()
         }

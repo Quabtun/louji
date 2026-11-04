@@ -93,6 +93,7 @@ fun RecordDetailScreen(
     val scope = rememberCoroutineScope()
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPurgeDialog by remember { mutableStateOf(false) }
     var waited by remember { mutableStateOf(false) }
 
     LaunchedEffect(recordId) {
@@ -124,11 +125,13 @@ fun RecordDetailScreen(
                 },
                 actions = {
                     record?.let { item ->
-                        IconButton(
-                            onClick = { onEdit(item.record.id) },
-                            modifier = Modifier.testTag("detail_edit"),
-                        ) {
-                            Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                        if (item.record.deletedAt == 0L) {
+                            IconButton(
+                                onClick = { onEdit(item.record.id) },
+                                modifier = Modifier.testTag("detail_edit"),
+                            ) {
+                                Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                            }
                         }
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
@@ -138,54 +141,83 @@ fun RecordDetailScreen(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("再来一单") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onDuplicate(item.record.id)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(if (item.record.archived) "取消归档" else "归档")
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onArchive(!item.record.archived)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("复制摘要") },
-                                    leadingIcon = {
-                                        Icon(Icons.Filled.Share, contentDescription = null)
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        clipboard.setText(AnnotatedString(item.shareText()))
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("摘要已复制")
-                                        }
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "删除记录",
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        showDeleteDialog = true
-                                    },
-                                )
+                                if (item.record.deletedAt > 0L) {
+                                    DropdownMenuItem(
+                                        text = { Text("恢复") },
+                                        onClick = {
+                                            menuExpanded = false
+                                            viewModel.restore(onRestored = onBack)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "彻底删除",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showPurgeDialog = true
+                                        },
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text("再来一单") },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onDuplicate(item.record.id)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(if (item.record.archived) "取消归档" else "归档")
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onArchive(!item.record.archived)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("复制摘要") },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.Share, contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            clipboard.setText(AnnotatedString(item.shareText()))
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("摘要已复制")
+                                            }
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "移到回收站",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showDeleteDialog = true
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -413,20 +445,30 @@ fun RecordDetailScreen(
                         }
 
                         Spacer(Modifier.height(24.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (item.record.deletedAt > 0L) {
                             OutlinedButton(
-                                onClick = { onEdit(item.record.id) },
-                                modifier = Modifier.weight(1f),
+                                onClick = { viewModel.restore(onRestored = onBack) },
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                             ) {
-                                Text("编辑记录")
+                                Text("恢复记录")
                             }
-                            OutlinedButton(
-                                onClick = { onDuplicate(item.record.id) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Text("再来一单")
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(
+                                    onClick = { onEdit(item.record.id) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                ) {
+                                    Text("编辑记录")
+                                }
+                                OutlinedButton(
+                                    onClick = { onDuplicate(item.record.id) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                ) {
+                                    Text("再来一单")
+                                }
                             }
                         }
                         Spacer(Modifier.height(20.dp))
@@ -454,15 +496,29 @@ fun RecordDetailScreen(
 
     if (showDeleteDialog) {
         ConfirmDialog(
-            title = "删除这条记录？",
-            text = "记录和它的附件会一起删除，无法恢复。",
-            confirmLabel = "删除",
-            destructive = true,
+            title = "移到回收站？",
+            text = "记录和它的附件会一起移入回收站，保留 7 天，之后自动彻底删除。",
+            confirmLabel = "移到回收站",
+            destructive = false,
             onConfirm = {
                 showDeleteDialog = false
-                viewModel.delete(onDeleted = onBack)
+                viewModel.trash(onTrashed = onBack)
             },
             onDismiss = { showDeleteDialog = false },
+        )
+    }
+
+    if (showPurgeDialog) {
+        ConfirmDialog(
+            title = "彻底删除这条记录？",
+            text = "记录和它的附件会立即删除，无法恢复。",
+            confirmLabel = "彻底删除",
+            destructive = true,
+            onConfirm = {
+                showPurgeDialog = false
+                viewModel.purge(onPurged = onBack)
+            },
+            onDismiss = { showPurgeDialog = false },
         )
     }
 }

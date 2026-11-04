@@ -29,6 +29,9 @@ class RecordRepository(
         recordDao.observeFiltered(query.trim(), filter.name, if (archived) 1 else 0)
             .map { records -> records.map { it.withOrderedAttachments() } }
 
+    fun observeTrashed(): Flow<List<RecordWithAttachments>> =
+        recordDao.observeTrashed().map { records -> records.map { it.withOrderedAttachments() } }
+
     fun observeRecord(id: Long): Flow<RecordWithAttachments?> = recordDao.observeRecord(id)
         .map { it?.withOrderedAttachments() }
 
@@ -134,6 +137,30 @@ class RecordRepository(
         record.attachments.forEach { mediaStore.deleteAttachment(it.filePath, it.thumbPath) }
     }
 
+    suspend fun softDelete(id: Long) {
+        recordDao.setDeletedAt(id, clock())
+    }
+
+    suspend fun restore(id: Long) {
+        recordDao.setDeletedAt(id, 0)
+    }
+
+    /**
+     * Permanently removes records that have been in the recycle bin for at least [olderThanMs],
+     * along with their media files. Called once at startup.
+     */
+    suspend fun purgeTrashed(olderThanMs: Long) {
+        val cutoff = clock() - olderThanMs
+        val expired = recordDao.getTrashedBefore(cutoff)
+        if (expired.isEmpty()) return
+        database.withTransaction {
+            expired.forEach { recordDao.deleteById(it.record.id) }
+        }
+        expired.forEach { record ->
+            record.attachments.forEach { mediaStore.deleteAttachment(it.filePath, it.thumbPath) }
+        }
+    }
+
     suspend fun setArchived(id: Long, archived: Boolean) {
         recordDao.setArchived(id, archived)
     }
@@ -183,7 +210,9 @@ class RecordRepository(
     }
 
     suspend fun allRecords(): List<RecordWithAttachments> =
-        recordDao.getAllOnce().map { it.withOrderedAttachments() }
+        recordDao.getAllOnce()
+            .filter { it.record.deletedAt == 0L }
+            .map { it.withOrderedAttachments() }
 
     suspend fun countBySignature(location: String, orderNo: String, createdAt: Long): Int =
         recordDao.countBySignature(location, orderNo, createdAt)
