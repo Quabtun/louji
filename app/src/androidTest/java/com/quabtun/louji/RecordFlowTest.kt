@@ -250,6 +250,36 @@ class RecordFlowTest {
         compose.onNodeWithText("阳光花园 3 栋").assertIsDisplayed()
     }
 
+    @Test
+    fun batchArchiveMovesSelectedToArchived() {
+        createRecord()
+        backToList()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithTag("selection_mode").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("selection_bar").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithText("阳光花园 3 栋").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("已选 1 项").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithTag("batch_archive").performClick()
+
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("还没有记录").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("view_archived").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("阳光花园 3 栋").assertExists()
+    }
+
     private fun createRecord() {
         compose.onNodeWithTag("create_record").performClick()
         compose.onNodeWithTag("decision_no_stairs").performClick()

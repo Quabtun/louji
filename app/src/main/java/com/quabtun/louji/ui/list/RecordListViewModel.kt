@@ -48,6 +48,12 @@ class RecordListViewModel(
     private val _dateRange = MutableStateFlow(DateRange())
     val dateRange: StateFlow<DateRange> = _dateRange.asStateFlow()
 
+    private val _selectionMode = MutableStateFlow(false)
+    val selectionMode: StateFlow<Boolean> = _selectionMode.asStateFlow()
+
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -128,6 +134,43 @@ class RecordListViewModel(
 
     fun consumeUndo() {
         deleteUndo.consume()
+    }
+
+    fun enterSelectionMode() {
+        _selectionMode.value = true
+    }
+
+    fun toggleSelection(id: Long) {
+        _selectedIds.value = _selectedIds.value.let {
+            if (id in it) it - id else it + id
+        }
+    }
+
+    fun selectAll(records: List<RecordWithAttachments>) {
+        _selectedIds.value = records.map { it.record.id }.toSet()
+    }
+
+    fun exitSelectionMode() {
+        _selectionMode.value = false
+        _selectedIds.value = emptySet()
+    }
+
+    fun archiveSelected(archived: Boolean) {
+        val ids = _selectedIds.value.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            repository.setArchivedBatch(ids, archived)
+            exitSelectionMode()
+        }
+    }
+
+    fun trashSelected() {
+        val ids = _selectedIds.value.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            repository.softDeleteBatch(ids)
+            exitSelectionMode()
+        }
     }
 
     private data class RecordsRequest(

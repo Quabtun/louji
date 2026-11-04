@@ -143,8 +143,14 @@ interface RecordDao {
     @Query("UPDATE records SET archived = :archived WHERE id = :id")
     suspend fun setArchived(id: Long, archived: Boolean)
 
+    @Query("UPDATE records SET archived = :archived WHERE id IN (:ids)")
+    suspend fun setArchivedForIds(ids: List<Long>, archived: Boolean)
+
     @Query("UPDATE records SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: Long, deletedAt: Long)
+
+    @Query("UPDATE records SET deletedAt = :deletedAt WHERE id IN (:ids)")
+    suspend fun setDeletedAtForIds(ids: List<Long>, deletedAt: Long)
 
     @Transaction
     @Query("SELECT * FROM records WHERE deletedAt > 0 AND deletedAt <= :cutoff")

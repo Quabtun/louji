@@ -205,6 +205,24 @@ class RecordDaoTest {
         assertTrue(recentId > 0)
     }
 
+    @Test
+    fun batchArchiveAndSoftDeleteWork() = runBlocking {
+        val a = recordDao.insert(record("A", "1"))
+        val b = recordDao.insert(record("B", "2"))
+        recordDao.insert(record("C", "3"))
+
+        recordDao.setArchivedForIds(listOf(a, b), true)
+        assertEquals(listOf("C"), recordDao.observeFiltered("", "ALL", 0).first().map { it.record.location })
+        assertEquals(2, recordDao.observeFiltered("", "ALL", 1).first().size)
+
+        recordDao.setArchivedForIds(listOf(a, b), false)
+        assertEquals(3, recordDao.observeFiltered("", "ALL", 0).first().size)
+
+        recordDao.setDeletedAtForIds(listOf(a, b), 1000L)
+        assertEquals(listOf("C"), recordDao.observeFiltered("", "ALL", 0).first().map { it.record.location })
+        assertEquals(2, recordDao.observeTrashed().first().size)
+    }
+
     private fun record(
         location: String,
         orderNo: String,

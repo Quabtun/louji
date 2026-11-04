@@ -179,6 +179,16 @@ class RecordRepository(
         recordDao.setArchived(id, archived)
     }
 
+    suspend fun setArchivedBatch(ids: List<Long>, archived: Boolean) {
+        if (ids.isEmpty()) return
+        recordDao.setArchivedForIds(ids, archived)
+    }
+
+    suspend fun softDeleteBatch(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        recordDao.setDeletedAtForIds(ids, clock())
+    }
+
     suspend fun deleteAttachment(attachmentId: Long) {
         val attachment = attachmentDao.getById(attachmentId) ?: return
         database.withTransaction { attachmentDao.deleteById(attachmentId) }

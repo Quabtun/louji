@@ -13,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -138,6 +140,8 @@ fun RecordListScreen(
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
     val undoState by viewModel.undoState.collectAsStateWithLifecycle()
+    val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
+    val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -170,34 +174,67 @@ fun RecordListScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(Color(0xFF121517)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Image(
-                                painter = painterResource(R.drawable.ic_louji_mark),
-                                contentDescription = null,
-                                modifier = Modifier.size(width = 22.dp, height = 14.dp),
+                    if (selectionMode) {
+                        Text(
+                            text = "已选 ${selectedIds.size} 项",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(Color(0xFF121517)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_louji_mark),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(width = 22.dp, height = 14.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(9.dp))
+                            Text(
+                                text = "楼记",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
                             )
                         }
-                        Spacer(Modifier.width(9.dp))
-                        Text(
-                            text = "楼记",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                        )
+                    }
+                },
+                navigationIcon = {
+                    if (selectionMode) {
+                        IconButton(
+                            onClick = viewModel::exitSelectionMode,
+                            modifier = Modifier.testTag("selection_cancel"),
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "退出多选")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.testTag("settings_button"),
-                    ) {
-                        Icon(Icons.Filled.Settings, contentDescription = "设置")
+                    if (selectionMode) {
+                        TextButton(
+                            onClick = { viewModel.selectAll(records) },
+                            modifier = Modifier.testTag("select_all"),
+                        ) {
+                            Text("全选")
+                        }
+                    } else {
+                        TextButton(
+                            onClick = viewModel::enterSelectionMode,
+                            modifier = Modifier.testTag("selection_mode"),
+                        ) {
+                            Text("多选")
+                        }
+                        IconButton(
+                            onClick = onOpenSettings,
+                            modifier = Modifier.testTag("settings_button"),
+                        ) {
+                            Icon(Icons.Filled.Settings, contentDescription = "设置")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -330,23 +367,43 @@ fun RecordListScreen(
                     items(records, key = { it.record.id }) { record ->
                         RecordCard(
                             record = record,
-                            onClick = { onOpenMedia(record.record.id) },
+                            selectionMode = selectionMode,
+                            selected = record.record.id in selectedIds,
+                            onClick = {
+                                if (selectionMode) {
+                                    viewModel.toggleSelection(record.record.id)
+                                } else {
+                                    onOpenMedia(record.record.id)
+                                }
+                            },
+                            onToggleSelect = { viewModel.toggleSelection(record.record.id) },
                             onOpenDetail = { onOpenDetail(record.record.id) },
                             onOpenThumbnail = { zoomedImage = it },
                         )
                     }
                 }
                 }
-                FloatingActionButton(
-                    onClick = onCreate,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 20.dp, bottom = 20.dp)
-                        .testTag("create_record"),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "记一单")
+                if (selectionMode) {
+                    SelectionActionBar(
+                        count = selectedIds.size,
+                        showArchive = !showTrash,
+                        archived = showArchived,
+                        onArchive = { viewModel.archiveSelected(!showArchived) },
+                        onTrash = viewModel::trashSelected,
+                        onCancel = viewModel::exitSelectionMode,
+                    )
+                } else {
+                    FloatingActionButton(
+                        onClick = onCreate,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = 20.dp)
+                            .testTag("create_record"),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "记一单")
+                    }
                 }
             }
         }
@@ -657,9 +714,65 @@ private fun sortLabel(sort: RecordSort): String = when (sort) {
 }
 
 @Composable
+private fun BoxScope.SelectionActionBar(
+    count: Int,
+    showArchive: Boolean,
+    archived: Boolean,
+    onArchive: () -> Unit,
+    onTrash: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .fillMaxWidth()
+            .testTag("selection_bar"),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "已选 $count 项",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            if (showArchive) {
+                TextButton(
+                    onClick = onArchive,
+                    modifier = Modifier.testTag("batch_archive"),
+                ) {
+                    Text(if (archived) "取消归档" else "归档")
+                }
+            }
+            TextButton(
+                onClick = onTrash,
+                modifier = Modifier.testTag("batch_trash"),
+            ) {
+                Text("移到回收站")
+            }
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.testTag("batch_cancel"),
+            ) {
+                Text("取消")
+            }
+        }
+    }
+}
+
+@Composable
 private fun RecordCard(
     record: RecordWithAttachments,
+    selectionMode: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onToggleSelect: () -> Unit,
     onOpenDetail: () -> Unit,
     onOpenThumbnail: (String) -> Unit,
 ) {
@@ -673,10 +786,25 @@ private fun RecordCard(
             .testTag("record_card_${item.id}"),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+            },
+        ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
+                if (selectionMode) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = { onToggleSelect() },
+                        modifier = Modifier.testTag("select_${item.id}"),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 StatusStamp(noStairs = item.noStairs)
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -810,19 +938,21 @@ private fun RecordCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(
-                    onClick = onOpenDetail,
-                    modifier = Modifier
-                        .padding(end = 64.dp)
-                        .testTag("details_${item.id}"),
-                ) {
-                    Icon(
-                        Icons.Filled.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(15.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("详细信息", style = MaterialTheme.typography.labelMedium)
+                if (!selectionMode) {
+                    TextButton(
+                        onClick = onOpenDetail,
+                        modifier = Modifier
+                            .padding(end = 64.dp)
+                            .testTag("details_${item.id}"),
+                    ) {
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("详细信息", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }
