@@ -21,8 +21,12 @@ class RecordRepository(
     private val recordDao = database.recordDao()
     private val attachmentDao = database.attachmentDao()
 
-    fun observeRecords(query: String, filter: RecordFilter): Flow<List<RecordWithAttachments>> =
-        recordDao.observeFiltered(query.trim(), filter.name)
+    fun observeRecords(
+        query: String,
+        filter: RecordFilter,
+        archived: Boolean,
+    ): Flow<List<RecordWithAttachments>> =
+        recordDao.observeFiltered(query.trim(), filter.name, if (archived) 1 else 0)
             .map { records -> records.map { it.withOrderedAttachments() } }
 
     fun observeRecord(id: Long): Flow<RecordWithAttachments?> = recordDao.observeRecord(id)
@@ -68,6 +72,7 @@ class RecordRepository(
                         personalityNote = draft.personalityNote.trim(),
                         remark = draft.remark.trim(),
                         climbNote = draft.climbNote.trim(),
+                        archived = false,
                         createdAt = now,
                         updatedAt = now,
                     ),
@@ -127,6 +132,10 @@ class RecordRepository(
         val record = recordDao.getRecord(id) ?: return
         database.withTransaction { recordDao.deleteById(id) }
         record.attachments.forEach { mediaStore.deleteAttachment(it.filePath, it.thumbPath) }
+    }
+
+    suspend fun setArchived(id: Long, archived: Boolean) {
+        recordDao.setArchived(id, archived)
     }
 
     suspend fun deleteAttachment(attachmentId: Long) {

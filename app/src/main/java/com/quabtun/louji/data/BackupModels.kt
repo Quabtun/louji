@@ -28,6 +28,7 @@ data class BackupRecord(
     val personalityNote: String = "",
     val remark: String = "",
     val climbNote: String = "",
+    val archived: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
     val attachments: List<BackupAttachment> = emptyList(),

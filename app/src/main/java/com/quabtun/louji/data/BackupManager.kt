@@ -321,6 +321,7 @@ class BackupManager(
         personalityNote = record.personalityNote,
         remark = record.remark,
         climbNote = record.climbNote,
+        archived = record.archived,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt,
         attachments = files.map { file ->
@@ -353,6 +354,7 @@ class BackupManager(
         personalityNote = backup.personalityNote,
         remark = backup.remark,
         climbNote = backup.climbNote,
+        archived = backup.archived,
         createdAt = createdAt,
         updatedAt = backup.updatedAt.takeIf { it > 0 } ?: now,
     )

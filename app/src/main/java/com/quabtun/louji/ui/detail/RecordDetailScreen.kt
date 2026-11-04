@@ -84,6 +84,7 @@ fun RecordDetailScreen(
     onBack: () -> Unit,
     onEdit: (Long) -> Unit,
     onDuplicate: (Long) -> Unit,
+    onArchive: (Boolean) -> Unit,
     onOpenMedia: (Long, Int) -> Unit,
 ) {
     val record by viewModel.record.collectAsStateWithLifecycle()
@@ -142,6 +143,15 @@ fun RecordDetailScreen(
                                     onClick = {
                                         menuExpanded = false
                                         onDuplicate(item.record.id)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(if (item.record.archived) "取消归档" else "归档")
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onArchive(!item.record.archived)
                                     },
                                 )
                                 DropdownMenuItem(

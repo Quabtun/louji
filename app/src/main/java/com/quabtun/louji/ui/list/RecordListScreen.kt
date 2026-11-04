@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
@@ -87,6 +89,7 @@ import com.quabtun.louji.R
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.MediaType
 import com.quabtun.louji.model.RecordFilter
+import com.quabtun.louji.model.RecordSort
 import com.quabtun.louji.model.RecordStats
 import com.quabtun.louji.model.TriState
 import com.quabtun.louji.ui.components.EmptyState
@@ -114,9 +117,12 @@ fun RecordListScreen(
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val showArchived by viewModel.showArchived.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     var zoomedImage by remember { mutableStateOf<String?>(null) }
+    var sortMenu by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
@@ -196,6 +202,14 @@ fun RecordListScreen(
                     FilterRow(
                         selected = filter,
                         onSelect = viewModel::setFilter,
+                    )
+                }
+                item {
+                    ArchiveSortRow(
+                        showArchived = showArchived,
+                        onShowArchivedChange = viewModel::setShowArchived,
+                        sort = sort,
+                        onSortChange = viewModel::setSort,
                     )
                 }
                 if (records.isEmpty() && isLoading) {
@@ -374,6 +388,70 @@ private fun FilterRow(selected: RecordFilter, onSelect: (RecordFilter) -> Unit) 
             )
         }
     }
+}
+
+@Composable
+private fun ArchiveSortRow(
+    showArchived: Boolean,
+    onShowArchivedChange: (Boolean) -> Unit,
+    sort: RecordSort,
+    onSortChange: (RecordSort) -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LouJiFilterChip(
+            selected = !showArchived,
+            onClick = { onShowArchivedChange(false) },
+            label = { Text("活跃") },
+            modifier = Modifier.testTag("view_active"),
+        )
+        Spacer(Modifier.width(8.dp))
+        LouJiFilterChip(
+            selected = showArchived,
+            onClick = { onShowArchivedChange(true) },
+            label = { Text("已归档") },
+            modifier = Modifier.testTag("view_archived"),
+        )
+        Spacer(Modifier.weight(1f))
+        Box {
+            TextButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.testTag("sort_menu"),
+            ) {
+                Text(
+                    text = "排序：${sortLabel(sort)}",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                listOf(
+                    RecordSort.UPDATED to "最近更新",
+                    RecordSort.FLOOR to "楼层",
+                    RecordSort.LOCATION to "位置",
+                ).forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            menuExpanded = false
+                            onSortChange(value)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun sortLabel(sort: RecordSort): String = when (sort) {
+    RecordSort.UPDATED -> "最近更新"
+    RecordSort.FLOOR -> "楼层"
+    RecordSort.LOCATION -> "位置"
 }
 
 @Composable

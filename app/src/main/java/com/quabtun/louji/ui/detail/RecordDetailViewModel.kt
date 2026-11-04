@@ -32,6 +32,11 @@ class RecordDetailViewModel(private val repository: RecordRepository) : ViewMode
         }
     }
 
+    fun setArchived(archived: Boolean) {
+        val id = recordId.value ?: return
+        viewModelScope.launch { repository.setArchived(id, archived) }
+    }
+
     fun deleteAttachment(attachmentId: Long) {
         viewModelScope.launch { repository.deleteAttachment(attachmentId) }
     }

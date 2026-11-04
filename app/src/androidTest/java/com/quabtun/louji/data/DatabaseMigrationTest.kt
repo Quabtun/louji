@@ -54,6 +54,39 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate3To4KeepsRecordAndDefaultsNotArchived() {
+        helper.createDatabase(TEST_DB, 3).apply {
+            execSQL(
+                """
+                INSERT INTO records (
+                    location, orderNo, gender, phoneTail, floor, roomNo,
+                    doorIntact, canOpenFromAbove, noStairs, willComeDown,
+                    personalityTags, personalityNote, remark, climbNote, createdAt, updatedAt
+                ) VALUES (
+                    '江景苑', 'A1', 'FEMALE', '4821', '21', '2103',
+                    'YES', 'NO', 'NO', 'YES',
+                    '[]', '', '门禁在左手边', '客户要送上门', 1, 1
+                )
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val database = helper.runMigrationsAndValidate(
+            TEST_DB,
+            4,
+            true,
+            LouJiDatabase.MIGRATION_3_4,
+        )
+        database.query("SELECT location, climbNote, archived FROM records").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("江景苑", cursor.getString(0))
+            assertEquals("客户要送上门", cursor.getString(1))
+            assertEquals(0, cursor.getInt(2))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "louji-migration-test.db"
     }

@@ -35,6 +35,7 @@ data class RecordEntity(
     val updatedAt: Long,
     val remark: String = "",
     val climbNote: String = "",
+    val archived: Boolean = false,
 )
 
 @Entity(

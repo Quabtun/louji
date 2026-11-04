@@ -78,21 +78,40 @@ class RecordDaoTest {
                 climbNote = "电梯坏了",
             ),
         )
-        assertEquals(2, recordDao.observeFiltered("", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("A12345", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("老小区", "ALL").first().size)
-        assertEquals(2, recordDao.observeFiltered("4821", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("门禁", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("下楼拿", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("电梯坏了", "ALL").first().size)
-        assertEquals(1, recordDao.observeFiltered("", "NO_STAIRS").first().size)
+        assertEquals(2, recordDao.observeFiltered("", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("A12345", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("老小区", "ALL", 0).first().size)
+        assertEquals(2, recordDao.observeFiltered("4821", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("门禁", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("下楼拿", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("电梯坏了", "ALL", 0).first().size)
+        assertEquals(1, recordDao.observeFiltered("", "NO_STAIRS", 0).first().size)
         assertEquals(
             "老小区",
-            recordDao.observeFiltered("", "STAIRS").first().single().record.location,
+            recordDao.observeFiltered("", "STAIRS", 0).first().single().record.location,
         )
-        assertEquals(1, recordDao.observeFiltered("", "WILL_COME_DOWN").first().size)
+        assertEquals(1, recordDao.observeFiltered("", "WILL_COME_DOWN", 0).first().size)
         assertTrue(noStairs > 0)
         assertTrue(stairs > 0)
+    }
+
+    @Test
+    fun archiveHidesFromActiveListAndStats() = runBlocking {
+        val active = recordDao.insert(record("活跃", "1"))
+        val archivedId = recordDao.insert(record("归档", "2"))
+        recordDao.setArchived(archivedId, true)
+
+        assertEquals(1, recordDao.observeFiltered("", "ALL", 0).first().size)
+        assertEquals("活跃", recordDao.observeFiltered("", "ALL", 0).first().single().record.location)
+        assertEquals(1, recordDao.observeFiltered("", "ALL", 1).first().size)
+        assertEquals("归档", recordDao.observeFiltered("", "ALL", 1).first().single().record.location)
+
+        val stats = recordDao.observeStats(0).first()
+        assertEquals(1, stats.total)
+
+        recordDao.setArchived(archivedId, false)
+        assertEquals(2, recordDao.observeFiltered("", "ALL", 0).first().size)
+        assertTrue(active > 0)
     }
 
     @Test
@@ -117,6 +136,7 @@ class RecordDaoTest {
         willComeDown: TriState = TriState.UNKNOWN,
         remark: String = "",
         climbNote: String = "",
+        archived: Boolean = false,
     ) = RecordEntity(
         location = location,
         orderNo = orderNo,
@@ -132,6 +152,7 @@ class RecordDaoTest {
         personalityNote = "",
         remark = remark,
         climbNote = climbNote,
+        archived = archived,
         createdAt = System.currentTimeMillis(),
         updatedAt = System.currentTimeMillis(),
     )

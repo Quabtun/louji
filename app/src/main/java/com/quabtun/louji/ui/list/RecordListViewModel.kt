@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.RecordFilter
+import com.quabtun.louji.model.RecordSort
+import com.quabtun.louji.model.RecordSorter
 import com.quabtun.louji.model.RecordStats
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -26,14 +28,24 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
     private val _filter = MutableStateFlow(RecordFilter.ALL)
     val filter: StateFlow<RecordFilter> = _filter.asStateFlow()
 
+    private val _showArchived = MutableStateFlow(false)
+    val showArchived: StateFlow<Boolean> = _showArchived.asStateFlow()
+
+    private val _sort = MutableStateFlow(RecordSort.UPDATED)
+    val sort: StateFlow<RecordSort> = _sort.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     val records: StateFlow<List<RecordWithAttachments>> = combine(
         _query.debounce(220),
         _filter,
-    ) { query, filter -> query to filter }
-        .flatMapLatest { (query, filter) -> repository.observeRecords(query, filter) }
+        _showArchived,
+    ) { query, filter, showArchived -> Triple(query, filter, showArchived) }
+        .flatMapLatest { (query, filter, showArchived) ->
+            repository.observeRecords(query, filter, showArchived)
+        }
+        .combine(_sort) { records, sort -> RecordSorter.sort(records, sort) }
         .onEach { _isLoading.value = false }
         .stateIn(
             scope = viewModelScope,
@@ -53,5 +65,13 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
 
     fun setFilter(value: RecordFilter) {
         _filter.value = value
+    }
+
+    fun setShowArchived(value: Boolean) {
+        _showArchived.value = value
+    }
+
+    fun setSort(value: RecordSort) {
+        _sort.value = value
     }
 }

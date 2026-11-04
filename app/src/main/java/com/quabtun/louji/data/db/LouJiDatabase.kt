@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, AttachmentEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -31,9 +31,15 @@ abstract class LouJiDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE records ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): LouJiDatabase =
             Room.databaseBuilder(context, LouJiDatabase::class.java, "louji.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-02
-版本：1.3.0
+版本：1.4.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,12 +9,12 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 28 / 28 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 18 / 18 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 31 / 31 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 20 / 20 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T05-16-56.100Z-48e53dc4087a` |
-| Release APK | 已签名，3.9 MB（v1.3.0，versionCode 14） | `apksigner verify` 通过 |
-| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.2.1 → v1.3.0） | 见第 6 节、`docs/screenshots/update-*.png` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T14-29-50.814Z-b4033e280e13` |
+| Release APK | 已签名，3.9 MB（v1.4.0，versionCode 15） | `apksigner verify` 通过 |
+| 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0 → v1.4.0） | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
 
@@ -32,9 +32,10 @@
 - `BackupJsonTest`：`BackupRecord` / `BackupManifest` 序列化往返、缺省字段兼容（含 `climbNote`）。
 - `ClipboardOrderParserTest`：带标签订单文本、楼栋/房号/电话/性别、楼层后缀与 `2-301`、日期不误判为房号、无关文本不臆造字段。
 - `AppLockControllerTest`：默认不锁、开启即锁、lock/unlock 流转、关闭功能清除锁定。
+- `RecordSorterTest`：楼层按数字大小、文本楼层排后；位置不区分大小写；最近更新倒序。
 - `InstallTargetTest`：Ready 与 NeedsPermission 都能解析出安装目标，其他状态返回 null（权限重试回归测试）。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 28 / 28 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 31 / 31 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
 ## 3. 仪器化测试（18，API 35 模拟器）
 
@@ -59,6 +60,7 @@
   - 拒绝超过 16MB 的 `records.json`，在 JSON 解析前终止。
 - `DatabaseMigrationTest`
   - 用 Room `MigrationTestHelper` 创建 v2 数据库，插入旧记录，执行 `MIGRATION_2_3` 并校验 `climbNote` 自动补为空串、旧字段保留。
+  - 创建 v3 数据库，执行 `MIGRATION_3_4` 并校验 `archived` 默认 0、旧字段保留。
 - `RecordFlowTest`
   - 通过真实表单创建含 11 个字段的记录，保存后进入详情并逐项断言。
   - 搜索、筛选、删除记录回空状态。
@@ -119,7 +121,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.3.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-04T05-16-56.100Z-48e53dc4087a`，seal `sha256:826f55179348a1c99d2322be44c8dec4d1687fdff2e16c693e80529e510e8d61`。
+- 结果（v1.4.0 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-04T14-29-50.814Z-b4033e280e13`，seal `sha256:1c41b74d785515111b094685a37bf60cec61e3573c3994cb8c570955c56949b5`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
@@ -165,7 +167,7 @@
 
 ## 6. 应用内更新 E2E
 
-安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8、v1.0.8 → v1.1.0、v1.1.0 → v1.1.1、v1.1.1 → v1.2.0、v1.2.0 → v1.2.1、v1.2.1 → v1.3.0 均走完整链路，最终版本 **v1.3.0（versionCode 14）**。
+安装 v1.0.0 → 设置检查更新 → 发现最新 v1.0.2 → 下载（进度到 100%）→ 系统安装器 → 覆盖安装，数据保留；随后 v1.0.2 → v1.0.3、v1.0.3 → v1.0.4、v1.0.4 → v1.0.5、v1.0.5 → v1.0.6、v1.0.6 → v1.0.7、v1.0.7 → v1.0.8、v1.0.8 → v1.1.0、v1.1.0 → v1.1.1、v1.1.1 → v1.2.0、v1.2.0 → v1.2.1、v1.2.1 → v1.3.0、v1.3.0 → v1.4.0 均走完整链路，最终版本 **v1.4.0（versionCode 15）**。
 
 - 发现并修复：在系统设置允许安装未知应用后，「我已允许，重试安装」原先只接受 `Ready` 状态，`NeedsPermission` 状态下点了没有反应。v1.0.3 同时接受两种状态，并新增 `InstallTargetTest` 回归测试。
 - 更新弹层：下载 / 安装按钮使用安全琥珀；release notes 的 Markdown 标题和列表符号会被清理。
@@ -180,6 +182,7 @@
 - v1.1.1 → v1.2.0 覆盖安装成功，旧记录保留；本版本新增本地剪贴板订单识别与填入，无数据库结构变化。
 - v1.2.0 → v1.2.1 覆盖安装成功；本版本仅修复剪贴板异常兜底与 API 26 测试线程问题，无数据库结构变化。
 - v1.2.1 → v1.3.0 覆盖安装成功；本版本新增可选应用锁，锁状态存 DataStore，无数据库结构变化。
+- v1.3.0 → v1.4.0 覆盖安装成功；本版本新增记录归档与列表排序，Room v3→v4 迁移新增 `archived` 列，旧数据保留。
 
 ## 7. 证据目录
 

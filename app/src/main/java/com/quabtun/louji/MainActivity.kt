@@ -181,6 +181,10 @@ private fun LouJiRoot(container: AppContainer) {
                         onBack = { navController.popBackStack() },
                         onEdit = { id -> navController.navigate(editRoute(recordId = id)) },
                         onDuplicate = { id -> navController.navigate(editRoute(duplicateId = id)) },
+                        onArchive = { archived ->
+                            viewModel.setArchived(archived)
+                            navController.popBackStack()
+                        },
                         onOpenMedia = { id, index ->
                             navController.navigate("viewer/$id?index=$index")
                         },

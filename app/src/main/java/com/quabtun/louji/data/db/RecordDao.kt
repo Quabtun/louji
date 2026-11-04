@@ -36,10 +36,11 @@ interface RecordDao {
             OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
             OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
         )
+        AND archived = :archived
         ORDER BY createdAt DESC
         """,
     )
-    fun observeFiltered(query: String, filter: String): Flow<List<RecordWithAttachments>>
+    fun observeFiltered(query: String, filter: String, archived: Int): Flow<List<RecordWithAttachments>>
 
     @Transaction
     @Query("SELECT * FROM records WHERE id = :id")
@@ -59,7 +60,7 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
             COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown
         FROM records
-        WHERE createdAt >= :since
+        WHERE createdAt >= :since AND archived = 0
         """,
     )
     fun observeStats(since: Long): Flow<RecordStats>
@@ -88,6 +89,9 @@ interface RecordDao {
 
     @Update
     suspend fun update(record: RecordEntity)
+
+    @Query("UPDATE records SET archived = :archived WHERE id = :id")
+    suspend fun setArchived(id: Long, archived: Boolean)
 
     @Query("DELETE FROM records WHERE id = :id")
     suspend fun deleteById(id: Long)
