@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.6.0
+版本：1.7.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,12 +9,12 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 31 / 31 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 27 / 27 通过 | `app/build/reports/androidTests/connected/debug/` |
-| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 18 / 18 通过 | 独立 `LouJiAudit26` 模拟器 |
+| JVM 单元测试 | 36 / 36 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 28 / 28 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 19 / 19 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T16-27-35.071Z-fba4b5f24aeb` |
-| Release APK | 已签名（v1.6.0，versionCode 17） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T16-49-33.269Z-4b23e1a2f717` |
+| Release APK | 已签名（v1.7.0，versionCode 18） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -35,10 +35,11 @@
 - `AppLockControllerTest`：默认不锁、开启即锁、lock/unlock 流转、关闭功能清除锁定。
 - `RecordSorterTest`：楼层按数字大小、文本楼层排后；位置不区分大小写；最近更新倒序。
 - `InstallTargetTest`：Ready 与 NeedsPermission 都能解析出安装目标，其他状态返回 null（权限重试回归测试）。
+- `DateRangePresetsTest`：滚动窗口起始、空范围判定、UTC→本地自然日换算、跨时区对齐、次日边界。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 31 / 31 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 36 / 36 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（27，API 35 模拟器）
+## 3. 仪器化测试（28，API 35 模拟器）
 
 命令：
 
@@ -54,6 +55,7 @@
   - 本月统计、最近位置聚合。
   - 回收站：软删除后从活跃列表与统计/最近位置排除，可观察、可恢复；按 `deletedAt` 截止时间查询待清理记录。
   - 洞察聚合：全周期决策分布与按位置聚合（免爬/会下来），归档记录不参与。
+  - 日期范围：`observeFilteredByDate` 按 `createdAt` 起止过滤，与无界/近 7 天/近 30 天/显式区间断言一致。
 - `BackupManagerTest`
   - 导出 → 导入往返：字段、标签、媒体文件均恢复。
   - 合并导入对相同签名的记录去重。
@@ -116,6 +118,8 @@
 | v1.4.0 → v1.5.0 覆盖安装迁移 | 通过 | v1.4.0 建 `MigrationSmoke` → 覆盖安装 v1.5.0 → 记录保留、新增「回收站」chip；`recycle-migrated.png` |
 | 统计页（全周期/决策/楼栋洞察） | 通过 | 首页统计条 → 统计页：总记录/免爬率/会下来、爬楼决策、楼栋洞察与 DB 一致；`stats.png` |
 | 导出备份密码框（可选加密） | 通过 | 设置 → 导出备份 → 弹密码框（留空=明文 / 填写=AES-256）；`export-password-dialog.png` |
+| 日期筛选（预设下拉 + 应用 + 清除） | 通过 | 首页「日期：全部」→ 下拉近 7/30/90 天 + 自定义；近 7 天应用后 chip 变「日期：自 10/28」并出现清除按钮；`date-filter-active.png` |
+| 日期自定义范围 DatePicker | 通过 | 「自定义范围」→ 系统日期选择器正常弹出（无崩溃）；`date-filter-custom-picker.png` |
 
 ### 相机说明
 
@@ -196,6 +200,7 @@
 - v1.3.0 → v1.4.0 覆盖安装成功；本版本新增记录归档与列表排序，Room v3→v4 迁移新增 `archived` 列，旧数据保留。本次模拟器对 `release-assets.githubusercontent.com` 下载出现 `Connection reset`，应用内下载未走完，改为本地同签名覆盖安装验证；下载逻辑此前已在 debug 构建中验证成功。
 - v1.4.0 → v1.5.0 覆盖安装成功；本版本新增回收站（软删除），Room v4→v5 迁移新增 `deletedAt` 列，旧数据保留（`MigrationSmoke` 记录在 v1.4.0 创建、v1.5.0 覆盖后仍显示）。本次仍采用本地同签名覆盖安装验证，应用内下载未走完（模拟器对 release-assets 下载 `Connection reset`，属环境/网络问题，非代码问题）。
 - v1.5.0 → v1.6.0 覆盖安装成功；本版本新增加密备份与统计页，无数据库结构变化，旧记录保留（`MigrationSmoke` 仍显示）。加密往返由 `BackupManagerTest`（debug 与 API 26 均过）验证；R8 已对 zip4j 加 keep 规则。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.6.0 → v1.7.0 覆盖安装成功；本版本新增日期范围筛选，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
@@ -210,6 +215,7 @@
 - `docs/screenshots/update-available.png` / `update-installer.png` / `update-installed.png`
 - `docs/screenshots/recycle-home.png` / `recycle-trash-view.png` / `recycle-detail-menu.png` / `recycle-migrated.png`
 - `docs/screenshots/stats.png` / `export-password-dialog.png`
+- `docs/screenshots/date-filter-active.png` / `date-filter-custom-picker.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
