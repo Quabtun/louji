@@ -13,6 +13,7 @@
 | 仪器化测试（API 35） | 40 / 40 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26） | DAO + 迁移 + 备份加密 23 / 23 通过 | 独立 `LouJiAudit26` 模拟器 |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
+| 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-04T21-33-51.690Z-706cd273182f` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
@@ -145,6 +146,7 @@
 | TalkBack 走查（列表/详情/表单） | 通过 | 模拟器启用 TalkBack，无障碍树核对内容描述与状态朗读；见 `docs/ACCESSIBILITY.md` |
 | 2.0× 字体 | 通过 | 列表/详情/表单可滚动、无横向裁剪；`详细信息`/时间戳经滚动可见 |
 | API 24（minSdk）兼容性 | 通过 | `LouJiAudit24`（Android 7.0）DAO+迁移+备份加密 23/23 |
+| API 25 兼容性 | 通过 | `LouJiAudit25`（Android 7.1.1）DAO+迁移+备份加密 23/23 |
 | 批量归档（release 实机） | 通过 | 多选 → 勾选记录 → 归档 → 活跃空、已归档可见；`batch-selection.png` |
 | 合并重复入口（release 实机） | 通过 | 设置 → 合并重复记录 → 弹预览对话框（无重复时提示「没有发现重复记录」）；合并逻辑由 `mergeDuplicatesFlow` 仪器化测试覆盖 |
 
