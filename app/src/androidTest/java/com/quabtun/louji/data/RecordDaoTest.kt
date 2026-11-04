@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.quabtun.louji.data.db.AttachmentEntity
 import com.quabtun.louji.data.db.LouJiDatabase
 import com.quabtun.louji.data.db.RecordEntity
+import com.quabtun.louji.model.DateRangePresets
 import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.MediaType
 import com.quabtun.louji.model.TriState
@@ -178,6 +179,30 @@ class RecordDaoTest {
         assertEquals(2, sunny.total)
         assertEquals(1, sunny.noStairs)
         assertEquals(1, sunny.willComeDown)
+    }
+
+    @Test
+    fun dateRangeFilterLimitsByCreatedAt() = runBlocking {
+        val base = 1_700_000_000_000L
+        val oldId = recordDao.insert(record("旧记录", "1").copy(createdAt = base - 10 * DateRangePresets.DAY_MS))
+        val recentId = recordDao.insert(record("新记录", "2").copy(createdAt = base - 2 * DateRangePresets.DAY_MS))
+
+        // Unbounded range returns everything.
+        assertEquals(2, recordDao.observeFilteredByDate("", "ALL", 0, 0L, 0L).first().size)
+
+        val last7 = DateRangePresets.lastDays(base, 7)
+        val in7 = recordDao.observeFilteredByDate("", "ALL", 0, last7.start, last7.end).first()
+        assertEquals(listOf("新记录"), in7.map { it.record.location })
+
+        val last30 = DateRangePresets.lastDays(base, 30)
+        assertEquals(2, recordDao.observeFilteredByDate("", "ALL", 0, last30.start, last30.end).first().size)
+
+        val explicitStart = base - 3 * DateRangePresets.DAY_MS
+        val explicitEnd = base - 1 * DateRangePresets.DAY_MS
+        val inExplicit = recordDao.observeFilteredByDate("", "ALL", 0, explicitStart, explicitEnd).first()
+        assertEquals(listOf("新记录"), inExplicit.map { it.record.location })
+        assertTrue(oldId > 0)
+        assertTrue(recentId > 0)
     }
 
     private fun record(

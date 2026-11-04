@@ -6,6 +6,7 @@ import com.quabtun.louji.data.db.LouJiDatabase
 import com.quabtun.louji.data.db.RecordEntity
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.MediaDraft
+import com.quabtun.louji.model.DateRange
 import com.quabtun.louji.model.RecordDraft
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordInsights
@@ -27,9 +28,15 @@ class RecordRepository(
         query: String,
         filter: RecordFilter,
         archived: Boolean,
+        dateRange: DateRange = DateRange(),
     ): Flow<List<RecordWithAttachments>> =
-        recordDao.observeFiltered(query.trim(), filter.name, if (archived) 1 else 0)
-            .map { records -> records.map { it.withOrderedAttachments() } }
+        recordDao.observeFilteredByDate(
+            query.trim(),
+            filter.name,
+            if (archived) 1 else 0,
+            dateRange.start,
+            dateRange.end,
+        ).map { records -> records.map { it.withOrderedAttachments() } }
 
     fun observeTrashed(): Flow<List<RecordWithAttachments>> =
         recordDao.observeTrashed().map { records -> records.map { it.withOrderedAttachments() } }

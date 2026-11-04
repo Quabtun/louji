@@ -10,6 +10,30 @@ import com.quabtun.louji.model.LocationStat
 import com.quabtun.louji.model.RecordStats
 import kotlinx.coroutines.flow.Flow
 
+private const val FILTER_WHERE = """
+    SELECT * FROM records
+    WHERE (
+        :query = ''
+        OR location LIKE '%' || :query || '%'
+        OR orderNo LIKE '%' || :query || '%'
+        OR phoneTail LIKE '%' || :query || '%'
+        OR floor LIKE '%' || :query || '%'
+        OR roomNo LIKE '%' || :query || '%'
+        OR remark LIKE '%' || :query || '%'
+        OR climbNote LIKE '%' || :query || '%'
+        OR personalityNote LIKE '%' || :query || '%'
+        OR personalityTags LIKE '%' || :query || '%'
+    )
+    AND (
+        :filter = 'ALL'
+        OR (:filter = 'STAIRS' AND noStairs = 'NO')
+        OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
+        OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
+    )
+    AND archived = :archived
+    AND deletedAt = 0
+"""
+
 @Dao
 interface RecordDao {
     @Transaction
@@ -17,33 +41,23 @@ interface RecordDao {
     fun observeAll(): Flow<List<RecordWithAttachments>>
 
     @Transaction
-    @Query(
-        """
-        SELECT * FROM records
-        WHERE (
-            :query = ''
-            OR location LIKE '%' || :query || '%'
-            OR orderNo LIKE '%' || :query || '%'
-            OR phoneTail LIKE '%' || :query || '%'
-            OR floor LIKE '%' || :query || '%'
-            OR roomNo LIKE '%' || :query || '%'
-            OR remark LIKE '%' || :query || '%'
-            OR climbNote LIKE '%' || :query || '%'
-            OR personalityNote LIKE '%' || :query || '%'
-            OR personalityTags LIKE '%' || :query || '%'
-        )
-        AND (
-            :filter = 'ALL'
-            OR (:filter = 'STAIRS' AND noStairs = 'NO')
-            OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
-            OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
-        )
-        AND archived = :archived
-        AND deletedAt = 0
-        ORDER BY createdAt DESC
-        """,
-    )
+    @Query(FILTER_WHERE + " ORDER BY createdAt DESC")
     fun observeFiltered(query: String, filter: String, archived: Int): Flow<List<RecordWithAttachments>>
+
+    @Transaction
+    @Query(
+        FILTER_WHERE +
+            " AND (:startTime = 0 OR createdAt >= :startTime)" +
+            " AND (:endTime = 0 OR createdAt < :endTime)" +
+            " ORDER BY createdAt DESC",
+    )
+    fun observeFilteredByDate(
+        query: String,
+        filter: String,
+        archived: Int,
+        startTime: Long,
+        endTime: Long,
+    ): Flow<List<RecordWithAttachments>>
 
     @Transaction
     @Query("SELECT * FROM records WHERE deletedAt > 0 ORDER BY deletedAt DESC")

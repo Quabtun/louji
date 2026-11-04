@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -88,6 +91,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.quabtun.louji.R
 import com.quabtun.louji.data.db.RecordWithAttachments
+import com.quabtun.louji.model.DateRange
+import com.quabtun.louji.model.DateRangePresets
 import com.quabtun.louji.model.MediaType
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordSort
@@ -104,6 +109,9 @@ import com.quabtun.louji.util.formatDateTime
 import com.quabtun.louji.util.placeDisplay
 import com.quabtun.louji.util.recordSearchSubtitle
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -122,6 +130,7 @@ fun RecordListScreen(
     val showArchived by viewModel.showArchived.collectAsStateWithLifecycle()
     val showTrash by viewModel.showTrash.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val dateRange by viewModel.dateRange.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     var zoomedImage by remember { mutableStateOf<String?>(null) }
@@ -205,6 +214,13 @@ fun RecordListScreen(
                         FilterRow(
                             selected = filter,
                             onSelect = viewModel::setFilter,
+                        )
+                    }
+                    item {
+                        DateFilterRow(
+                            dateRange = dateRange,
+                            onPreset = viewModel::setDateRange,
+                            onClear = viewModel::clearDateRange,
                         )
                     }
                 }
@@ -421,6 +437,119 @@ private fun FilterRow(selected: RecordFilter, onSelect: (RecordFilter) -> Unit) 
                 modifier = Modifier.testTag("filter_${filter.name}"),
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateFilterRow(
+    dateRange: DateRange,
+    onPreset: (DateRange) -> Unit,
+    onClear: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
+    var startPickedMillis by remember { mutableStateOf<Long?>(null) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LouJiFilterChip(
+            selected = dateRange.isActive,
+            onClick = { menuExpanded = true },
+            label = { Text("日期：${dateRangeLabel(dateRange)}") },
+            modifier = Modifier.testTag("date_filter"),
+        )
+        if (dateRange.isActive) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.testTag("date_filter_clear"),
+            ) {
+                Icon(
+                    Icons.Filled.Clear,
+                    contentDescription = "清除日期筛选",
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+        Box {
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("全部") },
+                    onClick = { menuExpanded = false; onClear() },
+                )
+                listOf(7 to "近 7 天", 30 to "近 30 天", 90 to "近 90 天").forEach { (days, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            menuExpanded = false
+                            onPreset(DateRangePresets.lastDays(System.currentTimeMillis(), days))
+                        },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("自定义范围") },
+                    onClick = { menuExpanded = false; showStartPicker = true },
+                )
+            }
+        }
+    }
+
+    if (showStartPicker) {
+        val state = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showStartPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        startPickedMillis = state.selectedDateMillis
+                        showStartPicker = false
+                        if (state.selectedDateMillis != null) showEndPicker = true
+                    },
+                ) { Text("下一步") }
+            },
+            dismissButton = { TextButton(onClick = { showStartPicker = false }) { Text("取消") } },
+        ) {
+            DatePicker(state = state)
+        }
+    }
+
+    if (showEndPicker) {
+        val state = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showEndPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEndPicker = false
+                        val endMillis = state.selectedDateMillis
+                        if (endMillis != null) {
+                            val start = startPickedMillis?.let { DateRangePresets.startOfDay(it) } ?: 0L
+                            val end = DateRangePresets.nextDayStart(DateRangePresets.startOfDay(endMillis))
+                            onPreset(DateRange(start = start, end = end))
+                        }
+                    },
+                ) { Text("确定") }
+            },
+            dismissButton = { TextButton(onClick = { showEndPicker = false }) { Text("取消") } },
+        ) {
+            DatePicker(state = state)
+        }
+    }
+}
+
+private fun dateRangeLabel(dateRange: DateRange): String {
+    if (!dateRange.isActive) return "全部"
+    val formatter = SimpleDateFormat("MM/dd", Locale.getDefault())
+    return if (dateRange.end == 0L) {
+        "自 ${formatter.format(Date(dateRange.start))}"
+    } else {
+        "${formatter.format(Date(dateRange.start))} – ${formatter.format(Date(dateRange.end - 1))}"
     }
 }
 

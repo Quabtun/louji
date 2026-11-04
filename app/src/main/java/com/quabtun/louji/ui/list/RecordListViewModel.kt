@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.db.RecordWithAttachments
+import com.quabtun.louji.model.DateRange
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordSort
 import com.quabtun.louji.model.RecordSorter
@@ -38,6 +39,9 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
     private val _sort = MutableStateFlow(RecordSort.UPDATED)
     val sort: StateFlow<RecordSort> = _sort.asStateFlow()
 
+    private val _dateRange = MutableStateFlow(DateRange())
+    val dateRange: StateFlow<DateRange> = _dateRange.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -46,14 +50,15 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
         _filter,
         _showArchived,
         _showTrash,
-    ) { query, filter, showArchived, showTrash ->
-        RecordsRequest(query, filter, showArchived, showTrash)
+        _dateRange,
+    ) { query, filter, showArchived, showTrash, dateRange ->
+        RecordsRequest(query, filter, showArchived, showTrash, dateRange)
     }
-        .flatMapLatest { (query, filter, showArchived, showTrash) ->
+        .flatMapLatest { (query, filter, showArchived, showTrash, dateRange) ->
             if (showTrash) {
                 repository.observeTrashed()
             } else {
-                repository.observeRecords(query, filter, showArchived)
+                repository.observeRecords(query, filter, showArchived, dateRange)
             }
         }
 
@@ -99,10 +104,19 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
         _sort.value = value
     }
 
+    fun setDateRange(range: DateRange) {
+        _dateRange.value = range
+    }
+
+    fun clearDateRange() {
+        _dateRange.value = DateRange()
+    }
+
     private data class RecordsRequest(
         val query: String,
         val filter: RecordFilter,
         val showArchived: Boolean,
         val showTrash: Boolean,
+        val dateRange: DateRange,
     )
 }
