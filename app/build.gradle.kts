@@ -23,8 +23,8 @@ android {
         applicationId = "com.quabtun.louji"
         minSdk = 24
         targetSdk = 34
-        versionCode = 27
-        versionName = "1.16.0"
+        versionCode = 28
+        versionName = "1.17.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -147,6 +147,9 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     implementation(libs.zip4j)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
+    implementation(libs.androidx.room.paging)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -95,6 +95,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.quabtun.louji.R
@@ -142,6 +144,8 @@ fun RecordListScreen(
     val undoState by viewModel.undoState.collectAsStateWithLifecycle()
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val recordsPaged = viewModel.recordsPaged.collectAsLazyPagingItems()
+    val usePaged = sort == RecordSort.UPDATED && !showTrash && !selectionMode
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -311,7 +315,77 @@ fun RecordListScreen(
                         )
                     }
                 }
-                if (records.isEmpty() && isLoading) {
+                if (usePaged) {
+                    val pagedLoading = recordsPaged.loadState.refresh is androidx.paging.LoadState.Loading
+                    if (pagedLoading && recordsPaged.itemCount == 0) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    } else if (recordsPaged.itemCount == 0) {
+                        item {
+                            val clearFilters = {
+                                viewModel.setQuery("")
+                                viewModel.setFilter(RecordFilter.ALL)
+                                focusManager.clearFocus()
+                            }
+                            EmptyState(
+                                title = if (query.isBlank() && filter == RecordFilter.ALL) {
+                                    "还没有记录"
+                                } else {
+                                    "没有匹配的记录"
+                                },
+                                body = if (query.isBlank() && filter == RecordFilter.ALL) {
+                                    "记下第一单，下次到楼下就知道要不要爬、会不会下来拿。"
+                                } else {
+                                    "换个关键词，或把筛选切回全部。"
+                                },
+                                action = {
+                                    if (query.isBlank() && filter == RecordFilter.ALL) {
+                                        FilledTonalButton(
+                                            onClick = onCreate,
+                                            shape = RoundedCornerShape(12.dp),
+                                        ) {
+                                            Text("记下第一单")
+                                        }
+                                    } else {
+                                        TextButton(onClick = clearFilters) {
+                                            Text("清除搜索和筛选")
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    } else {
+                        items(
+                            count = recordsPaged.itemCount,
+                            key = recordsPaged.itemKey { it.record.id },
+                        ) { index ->
+                            val record = recordsPaged[index] ?: return@items
+                            RecordCard(
+                                record = record,
+                                selectionMode = selectionMode,
+                                selected = record.record.id in selectedIds,
+                                onClick = {
+                                    if (selectionMode) {
+                                        viewModel.toggleSelection(record.record.id)
+                                    } else {
+                                        onOpenMedia(record.record.id)
+                                    }
+                                },
+                                onToggleSelect = { viewModel.toggleSelection(record.record.id) },
+                                onOpenDetail = { onOpenDetail(record.record.id) },
+                                onOpenThumbnail = { zoomedImage = it },
+                            )
+                        }
+                    }
+                } else if (records.isEmpty() && isLoading) {
                     item {
                         Box(
                             modifier = Modifier

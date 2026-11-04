@@ -42,6 +42,20 @@ class RecordRepository(
     fun observeTrashed(): Flow<List<RecordWithAttachments>> =
         recordDao.observeTrashed().map { records -> records.map { it.withOrderedAttachments() } }
 
+    fun recordPagingSource(
+        query: String,
+        filter: RecordFilter,
+        archived: Boolean,
+        dateRange: DateRange,
+    ): androidx.paging.PagingSource<Int, RecordWithAttachments> =
+        recordDao.loadFilteredPagedSource(
+            query.trim(),
+            filter.name,
+            if (archived) 1 else 0,
+            dateRange.start,
+            dateRange.end,
+        )
+
     fun observeRecord(id: Long): Flow<RecordWithAttachments?> = recordDao.observeRecord(id)
         .map { it?.withOrderedAttachments() }
 

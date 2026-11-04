@@ -2,6 +2,9 @@ package com.quabtun.louji.ui.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import com.quabtun.louji.data.DeleteUndoController
 import com.quabtun.louji.data.PendingDelete
 import com.quabtun.louji.data.RecordRepository
@@ -87,6 +90,24 @@ class RecordListViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    /** Keyset-paginated source for the time-ordered (最近更新) view — the default and most data-heavy path. */
+    val recordsPaged: Flow<PagingData<RecordWithAttachments>> = combine(
+        _query.debounce(220),
+        _filter,
+        _showArchived,
+        _dateRange,
+    ) { query, filter, showArchived, dateRange ->
+        PagedRequest(query, filter, showArchived, dateRange)
+    }
+        .flatMapLatest { (query, filter, showArchived, dateRange) ->
+            Pager(
+                config = PagingConfig(pageSize = 20, enablePlaceholders = false),
+                pagingSourceFactory = {
+                    repository.recordPagingSource(query, filter, showArchived, dateRange)
+                },
+            ).flow
+        }
 
     val stats: StateFlow<RecordStats> = repository.observeStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordStats())
@@ -178,6 +199,13 @@ class RecordListViewModel(
         val filter: RecordFilter,
         val showArchived: Boolean,
         val showTrash: Boolean,
+        val dateRange: DateRange,
+    )
+
+    private data class PagedRequest(
+        val query: String,
+        val filter: RecordFilter,
+        val showArchived: Boolean,
         val dateRange: DateRange,
     )
 }

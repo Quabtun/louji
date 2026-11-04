@@ -60,6 +60,21 @@ interface RecordDao {
     ): Flow<List<RecordWithAttachments>>
 
     @Transaction
+    @Query(
+        FILTER_WHERE +
+            " AND (:startTime = 0 OR createdAt >= :startTime)" +
+            " AND (:endTime = 0 OR createdAt < :endTime)" +
+            " ORDER BY createdAt DESC, id DESC",
+    )
+    fun loadFilteredPagedSource(
+        query: String,
+        filter: String,
+        archived: Int,
+        startTime: Long,
+        endTime: Long,
+    ): androidx.paging.PagingSource<Int, RecordWithAttachments>
+
+    @Transaction
     @Query("SELECT * FROM records WHERE deletedAt > 0 ORDER BY deletedAt DESC")
     fun observeTrashed(): Flow<List<RecordWithAttachments>>
 

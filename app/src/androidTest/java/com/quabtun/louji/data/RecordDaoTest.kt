@@ -238,6 +238,35 @@ class RecordDaoTest {
         assertEquals(0, attachmentDao.getForRecord(b).size)
     }
 
+    @Test
+    fun pagingSourceLoadsPagesWithoutDuplicates() = runBlocking {
+        val base = 1_000_000L
+        repeat(25) { i ->
+            recordDao.insert(record("位置$i", "订单$i").copy(createdAt = base - i))
+        }
+
+        val source = recordDao.loadFilteredPagedSource("", "ALL", 0, 0L, 0L)
+        val seen = mutableListOf<Long>()
+        var key: Int? = 0
+        var guard = 0
+        while (guard < 6) {
+            val result = source.load(
+                androidx.paging.PagingSource.LoadParams.Refresh(
+                    key = key,
+                    loadSize = 10,
+                    placeholdersEnabled = false,
+                ),
+            )
+            val page = result as? androidx.paging.PagingSource.LoadResult.Page ?: break
+            seen += page.data.map { it.record.id }
+            key = page.nextKey
+            if (page.data.isEmpty() || page.nextKey == null) break
+            guard++
+        }
+        assertEquals(25, seen.size)
+        assertEquals(25, seen.toSet().size)
+    }
+
     private fun record(
         location: String,
         orderNo: String,
