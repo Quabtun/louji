@@ -4,6 +4,7 @@ import android.content.Context
 import com.quabtun.louji.data.AppLockController
 import com.quabtun.louji.data.BackupManager
 import com.quabtun.louji.data.DeleteUndoController
+import com.quabtun.louji.data.DiagnosticLog
 import com.quabtun.louji.data.LocalMediaStore
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.SettingsStore
@@ -24,4 +25,5 @@ class AppContainer(context: Context) {
     val updater = GitHubUpdater(context)
     val lock = AppLockController(settings.settings, applicationScope)
     val deleteUndo = DeleteUndoController()
+    val diagnostics = DiagnosticLog(context)
 }

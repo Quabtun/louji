@@ -71,6 +71,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 _backup.value = BackupUiState(
                     message = "已导出 ${manifest.recordCount} 条记录、${manifest.mediaCount} 个附件",
                 )
+                container.diagnostics.log(
+                    "backup_export",
+                    "records=${manifest.recordCount} media=${manifest.mediaCount}",
+                )
                 refreshStorage()
             } catch (error: Throwable) {
                 _backup.value = BackupUiState(
@@ -94,6 +98,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 val skipped = if (summary.skipped > 0) "，跳过 ${summary.skipped} 条重复" else ""
                 _backup.value = BackupUiState(
                     message = "已导入 ${summary.imported} 条记录、${summary.media} 个附件$skipped",
+                )
+                container.diagnostics.log(
+                    "backup_import",
+                    "imported=${summary.imported} skipped=${summary.skipped} media=${summary.media}",
                 )
                 refreshStorage()
             } catch (error: Throwable) {
@@ -148,5 +156,15 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun dismissDuplicates() {
         _duplicates.value = null
+    }
+
+    fun exportDiagnostics(uri: Uri) {
+        viewModelScope.launch {
+            val ok = container.diagnostics.exportTo(uri)
+            _backup.value = BackupUiState(
+                message = if (ok) "诊断日志已导出" else "导出诊断日志失败",
+                isError = !ok,
+            )
+        }
     }
 }

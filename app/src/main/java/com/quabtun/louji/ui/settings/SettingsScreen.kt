@@ -120,6 +120,11 @@ fun SettingsScreen(
             pendingImportUri = uri
         }
     }
+    val diagnosticsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        uri?.let(viewModel::exportDiagnostics)
+    }
     val lockConfirmLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -255,6 +260,16 @@ fun SettingsScreen(
                     subtitle = "把同一位置、同一订单的重复记录合成一条",
                     icon = R.drawable.ic_merge,
                     onClick = { viewModel.checkDuplicates() },
+                )
+                SettingsRow(
+                    title = "导出诊断日志",
+                    subtitle = "本地脱敏的运行日志，不含客户信息，可自行保存排查问题",
+                    icon = R.drawable.ic_info,
+                    onClick = {
+                        diagnosticsLauncher.launch(
+                            "louji-diagnostics-${System.currentTimeMillis()}.txt",
+                        )
+                    },
                 )
                 SettingsRow(
                     title = "清除所有记录",

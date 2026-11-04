@@ -18,6 +18,12 @@ class LouJiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.diagnostics.log("app_start", "version=${com.quabtun.louji.BuildConfig.VERSION_NAME}")
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching { container.diagnostics.logCrash(throwable) }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
         maintenanceScope.launch {
             runCatching {
                 container.mediaStore.sweepOrphans(
@@ -27,6 +33,8 @@ class LouJiApp : Application() {
             }
             runCatching {
                 container.repository.purgeTrashed(7 * 24 * 60 * 60 * 1000L)
+            }.onFailure {
+                container.diagnostics.log("purge_trashed", "failed: ${it.message.orEmpty()}")
             }
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
