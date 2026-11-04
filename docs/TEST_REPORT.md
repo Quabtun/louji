@@ -12,7 +12,7 @@
 | JVM 单元测试 | 24 / 24 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 18 / 18 通过 | `app/build/reports/androidTests/connected/debug/` |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-03T18-51-49.269Z-114d58efeed2` |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T03-19-27.775Z-50609fe6d4db` |
 | Release APK | 已签名，3.9 MB（v1.2.1，versionCode 13） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.2.0 → v1.2.1） | 见第 6 节、`docs/screenshots/update-*.png` |
 
@@ -118,7 +118,7 @@
 ### Mimosa 深度安全扫描
 
 - 命令：Mimosa `security_scan`（deep）。
-- 结果（v1.2.1 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-03T18-51-49.269Z-114d58efeed2`，seal `sha256:6921f825a6e5f87f91d6332ad15960a56775ec54560dc7f4c589bd3933548eea`。
+- 结果（v1.2.1 最终复扫）：`findingCount: 0`，`packagesScanned: 63`，scanId `scan-2026-11-04T03-19-27.775Z-50609fe6d4db`，seal `sha256:7ad3e7039fef2be4c4a51572f299aa58b0d50c6d916983187d92721c0123c877`。
 - 证据边界：Mimosa 为 `static_only_no_runtime_execution`，library source / callgraph 部分不可用；因此只报告「本次静态深度扫描 0 findings」，不宣称应用绝对无漏洞。
 - 人工复核重点：`allowBackup=false`、FileProvider 仅暴露 `cache/updates/`、导出/导入路径穿越防护、APK 下载仅信任 `github.com` / `objects.githubusercontent.com` / `release-assets.githubusercontent.com`、SHA-256 校验、无明文流量。
 
