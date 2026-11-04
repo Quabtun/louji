@@ -23,8 +23,8 @@ android {
         applicationId = "com.quabtun.louji"
         minSdk = 24
         targetSdk = 34
-        versionCode = 23
-        versionName = "1.12.0"
+        versionCode = 24
+        versionName = "1.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

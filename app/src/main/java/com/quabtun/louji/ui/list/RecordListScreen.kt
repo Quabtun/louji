@@ -482,6 +482,7 @@ private fun SearchField(
         onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
+            .semantics { contentDescription = "搜索位置、订单号、尾号、房号" }
             .testTag("search_field"),
         placeholder = { Text("搜位置、订单号、尾号、房号") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
