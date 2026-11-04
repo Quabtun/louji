@@ -16,6 +16,7 @@ class DisableUpdateRule : ExternalResource() {
             app.container.settings.setAutoCheckUpdates(false)
             app.container.settings.setLastUpdateCheck(System.currentTimeMillis())
             app.container.settings.setOnboardingSeen(true)
+            app.container.settings.setBackupReminderEnabled(false)
         }
     }
 

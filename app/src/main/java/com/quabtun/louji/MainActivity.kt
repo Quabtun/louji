@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +42,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.quabtun.louji.data.AppSettings
+import com.quabtun.louji.model.BackupReminder
 import com.quabtun.louji.ui.AppViewModelFactory
 import com.quabtun.louji.ui.lock.AppLockScreen
 import com.quabtun.louji.ui.onboarding.OnboardingScreen
@@ -91,6 +95,7 @@ private fun LouJiRoot(container: AppContainer) {
     val context = LocalContext.current
     var settings by remember { mutableStateOf(AppSettings()) }
     var settingsReady by remember { mutableStateOf(false) }
+    var showBackupReminder by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         container.settings.settings.collect {
@@ -270,6 +275,42 @@ private fun LouJiRoot(container: AppContainer) {
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(16.dp),
+            )
+        }
+
+        LaunchedEffect(settingsReady) {
+            if (settingsReady && BackupReminder.shouldRemind(
+                    lastBackupAt = settings.lastBackupAt,
+                    now = System.currentTimeMillis(),
+                    enabled = settings.backupReminderEnabled,
+                )
+            ) {
+                showBackupReminder = true
+            }
+        }
+        if (showBackupReminder) {
+            AlertDialog(
+                onDismissRequest = { showBackupReminder = false },
+                title = { Text("备份提醒") },
+                text = { Text("距离上次备份已超过一周，建议导出一次备份，以防数据丢失。") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showBackupReminder = false
+                            navController.navigate(ROUTE_SETTINGS)
+                        },
+                    ) { Text("去备份") }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showBackupReminder = false
+                            scope.launch {
+                                container.settings.setLastBackupAt(System.currentTimeMillis())
+                            }
+                        },
+                    ) { Text("稍后") }
+                },
             )
         }
 

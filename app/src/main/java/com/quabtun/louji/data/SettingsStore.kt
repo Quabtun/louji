@@ -24,6 +24,8 @@ data class AppSettings(
     val lastUpdateCheck: Long = 0L,
     val appLockEnabled: Boolean = false,
     val onboardingSeen: Boolean = false,
+    val backupReminderEnabled: Boolean = true,
+    val lastBackupAt: Long = 0L,
 )
 
 class SettingsStore(private val context: Context) {
@@ -41,6 +43,8 @@ class SettingsStore(private val context: Context) {
                 lastUpdateCheck = preferences[LAST_UPDATE_CHECK] ?: 0L,
                 appLockEnabled = preferences[APP_LOCK_ENABLED] ?: false,
                 onboardingSeen = preferences[ONBOARDING_SEEN] ?: false,
+                backupReminderEnabled = preferences[BACKUP_REMINDER_ENABLED] ?: true,
+                lastBackupAt = preferences[LAST_BACKUP_AT] ?: 0L,
             )
         }
 
@@ -64,11 +68,21 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[ONBOARDING_SEEN] = seen }
     }
 
+    suspend fun setBackupReminderEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[BACKUP_REMINDER_ENABLED] = enabled }
+    }
+
+    suspend fun setLastBackupAt(timestamp: Long) {
+        context.settingsDataStore.edit { it[LAST_BACKUP_AT] = timestamp }
+    }
+
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
         val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         val ONBOARDING_SEEN = booleanPreferencesKey("onboarding_seen")
+        val BACKUP_REMINDER_ENABLED = booleanPreferencesKey("backup_reminder_enabled")
+        val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
     }
 }

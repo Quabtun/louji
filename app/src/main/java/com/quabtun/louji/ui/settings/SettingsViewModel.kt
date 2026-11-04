@@ -52,6 +52,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.setAppLockEnabled(enabled) }
     }
 
+    fun setBackupReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setBackupReminderEnabled(enabled) }
+    }
+
     fun refreshStorage() {
         viewModelScope.launch {
             _storage.value = container.mediaStore.storageUsage()
@@ -75,6 +79,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     "backup_export",
                     "records=${manifest.recordCount} media=${manifest.mediaCount}",
                 )
+                container.settings.setLastBackupAt(System.currentTimeMillis())
                 refreshStorage()
             } catch (error: Throwable) {
                 _backup.value = BackupUiState(

@@ -233,6 +233,22 @@ fun SettingsScreen(
                 Spacer(Modifier.height(22.dp))
                 SectionHeader("数据")
                 Spacer(Modifier.height(8.dp))
+                ListItem(
+                    headlineContent = { Text("每周备份提醒") },
+                    supportingContent = { Text("超过一周未导出备份时，启动后提醒一次") },
+                    trailingContent = {
+                        Switch(
+                            checked = settings.backupReminderEnabled,
+                            onCheckedChange = viewModel::setBackupReminderEnabled,
+                            modifier = Modifier.testTag("backup_reminder_switch"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    },
+                )
                 SettingsRow(
                     title = "导出备份",
                     subtitle = "打包记录和全部附件为 zip；可设密码加密，包含客户信息，请妥善保管",
