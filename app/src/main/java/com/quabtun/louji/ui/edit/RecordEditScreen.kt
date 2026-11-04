@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quabtun.louji.R
 import com.quabtun.louji.data.LocalMediaStore
+import com.quabtun.louji.data.OrderTextRecognizer
 import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.PersonalityTags
 import com.quabtun.louji.model.TriState
@@ -120,6 +121,9 @@ fun RecordEditScreen(
     var locationRequestId by remember { mutableStateOf(0) }
     var isLocating by remember { mutableStateOf(false) }
     var pendingPaste by remember { mutableStateOf<ParsedOrder?>(null) }
+    var pendingFillLabel by remember { mutableStateOf("剪贴板") }
+    var isRecognizing by remember { mutableStateOf(false) }
+    val ocrRecognizer = remember { OrderTextRecognizer(context) }
     val formScrollState = rememberScrollState()
 
     LaunchedEffect(recordId, duplicateId) {
@@ -182,7 +186,7 @@ fun RecordEditScreen(
     }
     val hasChanges = viewModel.hasUnsavedChanges()
 
-    fun applyParsedOrder(parsed: ParsedOrder) {
+    fun applyParsedOrder(parsed: ParsedOrder, sourceLabel: String = "剪贴板") {
         parsed.location?.let(viewModel::setLocation)
         parsed.orderNo?.let(viewModel::setOrderNo)
         parsed.phoneTail?.let(viewModel::setPhoneTail)
@@ -190,7 +194,7 @@ fun RecordEditScreen(
         parsed.roomNo?.let(viewModel::setRoomNo)
         parsed.gender?.let(viewModel::setGender)
         val labels = parsed.labels().joinToString("、")
-        scope.launch { snackbarHostState.showSnackbar("已从剪贴板填入：$labels") }
+        scope.launch { snackbarHostState.showSnackbar("已从${sourceLabel}填入：$labels") }
     }
 
     fun pasteOrder() {
@@ -219,10 +223,49 @@ fun RecordEditScreen(
             ui.draft.roomNo.isNotBlank() ||
             ui.draft.gender != Gender.UNKNOWN
         if (hasExisting) {
+            pendingFillLabel = "剪贴板"
             pendingPaste = parsed
         } else {
             applyParsedOrder(parsed)
         }
+    }
+
+    fun recognizeOrderImage(uri: android.net.Uri) {
+        scope.launch {
+            isRecognizing = true
+            try {
+                val text = ocrRecognizer.recognize(uri)
+                if (text.isBlank()) {
+                    snackbarHostState.showSnackbar("没识别到文字，可手动填写")
+                    return@launch
+                }
+                val parsed = ClipboardOrderParser.parse(text)
+                if (parsed.isEmpty) {
+                    snackbarHostState.showSnackbar("截图里没识别到订单信息，可手动填写")
+                    return@launch
+                }
+                val hasExisting = ui.draft.location.isNotBlank() ||
+                    ui.draft.orderNo.isNotBlank() ||
+                    ui.draft.phoneTail.isNotBlank() ||
+                    ui.draft.floor.isNotBlank() ||
+                    ui.draft.roomNo.isNotBlank() ||
+                    ui.draft.gender != Gender.UNKNOWN
+                if (hasExisting) {
+                    pendingFillLabel = "订单截图"
+                    pendingPaste = parsed
+                } else {
+                    applyParsedOrder(parsed, "订单截图")
+                }
+            } finally {
+                isRecognizing = false
+            }
+        }
+    }
+
+    val ocrImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        uri?.let { recognizeOrderImage(it) }
     }
 
     if (showCamera) {
@@ -365,6 +408,21 @@ fun RecordEditScreen(
                             modifier = Modifier.testTag("paste_order"),
                         ) {
                             Text("从剪贴板填入", style = MaterialTheme.typography.labelLarge)
+                        }
+                        TextButton(
+                            onClick = {
+                                ocrImageLauncher.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                    ),
+                                )
+                            },
+                            modifier = Modifier.testTag("ocr_order"),
+                        ) {
+                            Text(
+                                text = if (isRecognizing) "识别中…" else "识别订单截图",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -745,7 +803,7 @@ fun RecordEditScreen(
     pendingPaste?.let { parsed ->
         AlertDialog(
             onDismissRequest = { pendingPaste = null },
-            title = { Text("用剪贴板填入？") },
+            title = { Text("用${pendingFillLabel}填入？") },
             text = {
                 Text("会覆盖已填写的对应字段：\n\n${parsed.summary()}")
             },
@@ -753,7 +811,7 @@ fun RecordEditScreen(
                 TextButton(
                     onClick = {
                         pendingPaste = null
-                        applyParsedOrder(parsed)
+                        applyParsedOrder(parsed, pendingFillLabel)
                     },
                 ) { Text("填入") }
             },
