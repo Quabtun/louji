@@ -6,7 +6,8 @@ import org.junit.rules.ExternalResource
 
 /**
  * Runs before the activity is launched so a published GitHub release can never cover the UI
- * under test with an update sheet.
+ * under test with an update sheet, and so the first-run onboarding screen never blocks tests
+ * that assert against the main list.
  */
 class DisableUpdateRule : ExternalResource() {
     override fun before() {
@@ -14,6 +15,7 @@ class DisableUpdateRule : ExternalResource() {
         runBlocking {
             app.container.settings.setAutoCheckUpdates(false)
             app.container.settings.setLastUpdateCheck(System.currentTimeMillis())
+            app.container.settings.setOnboardingSeen(true)
         }
     }
 

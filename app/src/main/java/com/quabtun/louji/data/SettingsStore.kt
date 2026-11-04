@@ -23,6 +23,7 @@ data class AppSettings(
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheck: Long = 0L,
     val appLockEnabled: Boolean = false,
+    val onboardingSeen: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -39,6 +40,7 @@ class SettingsStore(private val context: Context) {
                 autoCheckUpdates = preferences[AUTO_CHECK_UPDATES] ?: true,
                 lastUpdateCheck = preferences[LAST_UPDATE_CHECK] ?: 0L,
                 appLockEnabled = preferences[APP_LOCK_ENABLED] ?: false,
+                onboardingSeen = preferences[ONBOARDING_SEEN] ?: false,
             )
         }
 
@@ -58,10 +60,15 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[APP_LOCK_ENABLED] = enabled }
     }
 
+    suspend fun setOnboardingSeen(seen: Boolean) {
+        context.settingsDataStore.edit { it[ONBOARDING_SEEN] = seen }
+    }
+
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
         val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
+        val ONBOARDING_SEEN = booleanPreferencesKey("onboarding_seen")
     }
 }

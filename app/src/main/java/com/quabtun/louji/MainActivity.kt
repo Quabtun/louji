@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.navigation.navArgument
 import com.quabtun.louji.data.AppSettings
 import com.quabtun.louji.ui.AppViewModelFactory
 import com.quabtun.louji.ui.lock.AppLockScreen
+import com.quabtun.louji.ui.onboarding.OnboardingScreen
 import com.quabtun.louji.ui.detail.RecordDetailScreen
 import com.quabtun.louji.ui.detail.RecordDetailViewModel
 import com.quabtun.louji.ui.edit.RecordEditScreen
@@ -58,6 +60,7 @@ import com.quabtun.louji.ui.theme.LouJiTheme
 import com.quabtun.louji.ui.update.UpdateSheet
 import com.quabtun.louji.ui.update.UpdateUiState
 import com.quabtun.louji.ui.update.UpdateViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,9 +90,13 @@ private fun LouJiRoot(container: AppContainer) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var settings by remember { mutableStateOf(AppSettings()) }
+    var settingsReady by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        container.settings.settings.collect { settings = it }
+        container.settings.settings.collect {
+            settings = it
+            settingsReady = true
+        }
     }
     LaunchedEffect(Unit) {
         updateViewModel.checkOnStartup()
@@ -110,10 +117,15 @@ private fun LouJiRoot(container: AppContainer) {
 
     LouJiTheme(themeMode = settings.themeMode) {
         val lockState by container.lock.state.collectAsStateWithLifecycle()
-        if (!lockState.ready) {
+        val scope = rememberCoroutineScope()
+        if (!lockState.ready || !settingsReady) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
+        } else if (!settings.onboardingSeen) {
+            OnboardingScreen(
+                onStart = { scope.launch { container.settings.setOnboardingSeen(true) } },
+            )
         } else if (lockState.locked) {
             AppLockScreen(onUnlocked = container.lock::unlock)
         } else {
