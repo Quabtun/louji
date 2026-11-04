@@ -75,6 +75,10 @@ interface RecordDao {
     @Query("SELECT * FROM records ORDER BY createdAt ASC")
     suspend fun getAllOnce(): List<RecordWithAttachments>
 
+    @Transaction
+    @Query("SELECT * FROM records WHERE archived = 0 AND deletedAt = 0 ORDER BY createdAt ASC")
+    suspend fun getActiveOnce(): List<RecordWithAttachments>
+
     @Query(
         """
         SELECT COUNT(*) AS total,

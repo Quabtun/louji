@@ -10,6 +10,7 @@ import com.quabtun.louji.model.DateRange
 import com.quabtun.louji.model.RecordDraft
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordInsights
+import com.quabtun.louji.model.RecordMerger
 import com.quabtun.louji.model.RecordStats
 import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
@@ -187,6 +188,26 @@ class RecordRepository(
     suspend fun softDeleteBatch(ids: List<Long>) {
         if (ids.isEmpty()) return
         recordDao.setDeletedAtForIds(ids, clock())
+    }
+
+    suspend fun findDuplicateGroups(): List<List<RecordWithAttachments>> =
+        RecordMerger.findDuplicateGroups(
+            recordDao.getActiveOnce().map { it.withOrderedAttachments() },
+        )
+
+    suspend fun mergeGroup(group: List<RecordWithAttachments>) {
+        if (group.size < 2) return
+        val base = group.first()
+        val others = group.drop(1)
+        val merged = RecordMerger.mergedFields(base.record, others.map { it.record })
+        val fromIds = others.map { it.record.id }
+        database.withTransaction {
+            recordDao.update(merged)
+            if (fromIds.isNotEmpty()) {
+                attachmentDao.reparentAttachments(fromIds, base.record.id)
+            }
+            recordDao.setDeletedAtForIds(fromIds, clock())
+        }
     }
 
     suspend fun deleteAttachment(attachmentId: Long) {

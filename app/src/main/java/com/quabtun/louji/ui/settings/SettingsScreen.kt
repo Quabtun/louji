@@ -92,6 +92,7 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val storage by viewModel.storage.collectAsStateWithLifecycle()
     val backup by viewModel.backup.collectAsStateWithLifecycle()
+    val duplicates by viewModel.duplicates.collectAsStateWithLifecycle()
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -248,6 +249,12 @@ fun SettingsScreen(
                     } ?: "正在计算…",
                     icon = R.drawable.ic_gallery,
                     onClick = { viewModel.refreshStorage() },
+                )
+                SettingsRow(
+                    title = "合并重复记录",
+                    subtitle = "把同一位置、同一订单的重复记录合成一条",
+                    icon = R.drawable.ic_merge,
+                    onClick = { viewModel.checkDuplicates() },
                 )
                 SettingsRow(
                     title = "清除所有记录",
@@ -509,6 +516,45 @@ fun SettingsScreen(
                 viewModel.clearAllData()
             },
             onDismiss = { showClearDialog = false },
+        )
+    }
+
+    if (duplicates != null) {
+        val groups = duplicates.orEmpty()
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDuplicates() },
+            title = { Text("重复记录") },
+            text = {
+                Column {
+                    if (groups.isEmpty()) {
+                        Text("没有发现重复记录。")
+                    } else {
+                        Text("发现 ${groups.size} 组重复，合并后保留信息最全的一条，其余移入回收站：")
+                        Spacer(Modifier.height(8.dp))
+                        groups.forEach { group ->
+                            val item = group.first().record
+                            val label = buildString {
+                                append(item.location)
+                                if (item.orderNo.isNotBlank()) append(" · ${item.orderNo}")
+                                else append(" · ${item.floor}-${item.roomNo}")
+                                append("（${group.size} 条）")
+                            }
+                            Text("· $label", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (groups.isNotEmpty()) {
+                    TextButton(
+                        onClick = { viewModel.mergeDuplicates() },
+                        modifier = Modifier.testTag("merge_duplicates"),
+                    ) { Text("合并") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissDuplicates() }) { Text("关闭") }
+            },
         )
     }
 

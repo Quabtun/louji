@@ -280,6 +280,46 @@ class RecordFlowTest {
         compose.onNodeWithText("阳光花园 3 栋").assertExists()
     }
 
+    @Test
+    fun mergeDuplicatesFlow() {
+        val app = ApplicationProvider.getApplicationContext<LouJiApp>()
+        runBlocking {
+            app.container.repository.save(
+                draft = com.quabtun.louji.model.RecordDraft(
+                    location = "重复楼",
+                    orderNo = "DUP1",
+                    noStairs = com.quabtun.louji.model.TriState.NO,
+                ),
+                recordId = null,
+                pendingMedia = emptyList(),
+            )
+            app.container.repository.save(
+                draft = com.quabtun.louji.model.RecordDraft(
+                    location = "重复楼",
+                    orderNo = "DUP1",
+                    noStairs = com.quabtun.louji.model.TriState.YES,
+                    remark = "第二条",
+                ),
+                recordId = null,
+                pendingMedia = emptyList(),
+            )
+        }
+
+        compose.onNodeWithTag("settings_button").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("合并重复记录").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("发现 1 组重复", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("merge_duplicates").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("已合并 1 条重复记录").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private fun createRecord() {
         compose.onNodeWithTag("create_record").performClick()
         compose.onNodeWithTag("decision_no_stairs").performClick()

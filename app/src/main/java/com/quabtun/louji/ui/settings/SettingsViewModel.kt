@@ -7,6 +7,7 @@ import com.quabtun.louji.AppContainer
 import com.quabtun.louji.data.AppSettings
 import com.quabtun.louji.data.ImportMode
 import com.quabtun.louji.data.LocalMediaStore
+import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,6 +32,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _backup = MutableStateFlow(BackupUiState())
     val backup: StateFlow<BackupUiState> = _backup.asStateFlow()
+
+    private val _duplicates = MutableStateFlow<List<List<RecordWithAttachments>>?>(null)
+    val duplicates: StateFlow<List<List<RecordWithAttachments>>?> = _duplicates.asStateFlow()
 
     init {
         refreshStorage()
@@ -120,5 +124,29 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun dismissBackupMessage() {
         _backup.value = _backup.value.copy(message = null, isError = false)
+    }
+
+    fun checkDuplicates() {
+        viewModelScope.launch {
+            _duplicates.value = container.repository.findDuplicateGroups()
+        }
+    }
+
+    fun mergeDuplicates() {
+        viewModelScope.launch {
+            val groups = _duplicates.value ?: return@launch
+            var merged = 0
+            groups.forEach {
+                merged += it.size - 1
+                container.repository.mergeGroup(it)
+            }
+            _duplicates.value = null
+            _backup.value = BackupUiState(message = "已合并 $merged 条重复记录")
+            refreshStorage()
+        }
+    }
+
+    fun dismissDuplicates() {
+        _duplicates.value = null
     }
 }

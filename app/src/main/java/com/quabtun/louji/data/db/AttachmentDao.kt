@@ -18,6 +18,9 @@ interface AttachmentDao {
     @Query("DELETE FROM attachments WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("UPDATE attachments SET recordId = :toRecordId WHERE recordId IN (:fromRecordIds)")
+    suspend fun reparentAttachments(fromRecordIds: List<Long>, toRecordId: Long)
+
     @Query("DELETE FROM attachments WHERE recordId = :recordId")
     suspend fun deleteForRecord(recordId: Long)
 

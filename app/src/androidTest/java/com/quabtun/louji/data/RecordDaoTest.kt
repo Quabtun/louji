@@ -223,6 +223,21 @@ class RecordDaoTest {
         assertEquals(2, recordDao.observeTrashed().first().size)
     }
 
+    @Test
+    fun reparentAttachmentsWorks() = runBlocking {
+        val a = recordDao.insert(record("A", "1"))
+        val b = recordDao.insert(record("B", "2"))
+        attachmentDao.insertAll(
+            listOf(attachment(a, "a.jpg"), attachment(a, "b.jpg"), attachment(b, "c.jpg")),
+        )
+        assertEquals(2, attachmentDao.getForRecord(a).size)
+        assertEquals(1, attachmentDao.getForRecord(b).size)
+
+        attachmentDao.reparentAttachments(listOf(b), a)
+        assertEquals(3, attachmentDao.getForRecord(a).size)
+        assertEquals(0, attachmentDao.getForRecord(b).size)
+    }
+
     private fun record(
         location: String,
         orderNo: String,
