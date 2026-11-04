@@ -262,6 +262,9 @@ class RecordFlowTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("selection_bar").fetchSemanticsNodes().isNotEmpty()
         }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
 
         compose.onNodeWithText("阳光花园 3 栋").performClick()
         compose.waitUntil(5_000) {

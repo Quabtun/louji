@@ -1007,12 +1007,14 @@ private fun RecordCard(
                 }
                 Text(
                     text = formatDateTime(item.createdAt),
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFeatureSettings = TabularNumbers.fontFeatureSettings,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.weight(1f))
                 if (!selectionMode) {
                     TextButton(
                         onClick = onOpenDetail,
