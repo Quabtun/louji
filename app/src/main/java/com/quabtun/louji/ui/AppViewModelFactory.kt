@@ -16,13 +16,13 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
         modelClass.isAssignableFrom(RecordListViewModel::class.java) ->
-            RecordListViewModel(container.repository) as T
+            RecordListViewModel(container.repository, container.deleteUndo) as T
 
         modelClass.isAssignableFrom(RecordEditViewModel::class.java) ->
             RecordEditViewModel(container.repository, container.mediaStore) as T
 
         modelClass.isAssignableFrom(RecordDetailViewModel::class.java) ->
-            RecordDetailViewModel(container.repository) as T
+            RecordDetailViewModel(container.repository, container.deleteUndo) as T
 
         modelClass.isAssignableFrom(MediaViewerViewModel::class.java) ->
             MediaViewerViewModel(container.repository) as T

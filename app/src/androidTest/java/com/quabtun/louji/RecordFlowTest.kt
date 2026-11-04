@@ -195,6 +195,9 @@ class RecordFlowTest {
         }
 
         compose.onNodeWithTag("create_record").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("paste_order").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("paste_order").performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("江景苑 2 栋").fetchSemanticsNodes().isNotEmpty()
@@ -224,6 +227,27 @@ class RecordFlowTest {
         waitForDetail()
         compose.onAllNodesWithText("新地址 9 栋").assertCountEquals(3)
         compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
+    }
+
+    @Test
+    fun deleteUndoRestoresRecord() {
+        createRecord()
+
+        compose.onNodeWithContentDescription("更多").performClick()
+        compose.onNodeWithText("移到回收站").performClick()
+        compose.onNodeWithText("移到回收站").performClick()
+
+        // Undo Snackbar appears after returning to the list.
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("已移入回收站").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("撤销").performClick()
+
+        // Record is restored to the active list.
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("阳光花园 3 栋").assertIsDisplayed()
     }
 
     private fun createRecord() {
@@ -272,5 +296,6 @@ class RecordFlowTest {
             app.container.repository.clearAll()
             app.container.mediaStore.sweepOrphans(emptySet())
         }
+        app.container.deleteUndo.consume()
     }
 }

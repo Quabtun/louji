@@ -2,6 +2,7 @@ package com.quabtun.louji.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.quabtun.louji.data.DeleteUndoController
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.db.RecordWithAttachments
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class RecordDetailViewModel(private val repository: RecordRepository) : ViewModel() {
+class RecordDetailViewModel(
+    private val repository: RecordRepository,
+    private val deleteUndo: DeleteUndoController,
+) : ViewModel() {
     private val recordId = MutableStateFlow<Long?>(null)
 
     val record: StateFlow<RecordWithAttachments?> = recordId
@@ -36,6 +40,7 @@ class RecordDetailViewModel(private val repository: RecordRepository) : ViewMode
         val id = recordId.value ?: return
         viewModelScope.launch {
             repository.softDelete(id)
+            deleteUndo.announce(id)
             onTrashed()
         }
     }

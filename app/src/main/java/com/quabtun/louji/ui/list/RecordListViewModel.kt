@@ -2,6 +2,8 @@ package com.quabtun.louji.ui.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.quabtun.louji.data.DeleteUndoController
+import com.quabtun.louji.data.PendingDelete
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.DateRange
@@ -21,9 +23,13 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-class RecordListViewModel(private val repository: RecordRepository) : ViewModel() {
+class RecordListViewModel(
+    private val repository: RecordRepository,
+    private val deleteUndo: DeleteUndoController,
+) : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -82,6 +88,8 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
     val recentLocations: StateFlow<List<String>> = repository.observeRecentLocations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val undoState: StateFlow<PendingDelete?> = deleteUndo.pending
+
     fun setQuery(value: String) {
         _query.value = value
     }
@@ -110,6 +118,16 @@ class RecordListViewModel(private val repository: RecordRepository) : ViewModel(
 
     fun clearDateRange() {
         _dateRange.value = DateRange()
+    }
+
+    fun restoreDeleted() {
+        val pending = deleteUndo.pending.value ?: return
+        deleteUndo.consume()
+        viewModelScope.launch { repository.restore(pending.recordId) }
+    }
+
+    fun consumeUndo() {
+        deleteUndo.consume()
     }
 
     private data class RecordsRequest(
