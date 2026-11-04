@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.8.0
+版本：1.9.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -10,11 +10,11 @@
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
 | JVM 单元测试 | 38 / 38 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 29 / 29 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 35） | 31 / 31 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26） | DAO + 迁移 + 备份加密 19 / 19 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T17-12-29.619Z-ca394fd9cacc` |
-| Release APK | 已签名（v1.8.0，versionCode 19） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T17-42-50.892Z-dd271a76a4d0` |
+| Release APK | 已签名（v1.9.0，versionCode 20） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -40,7 +40,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 38 / 38 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（29，API 35 模拟器）
+## 3. 仪器化测试（31，API 35 模拟器）
 
 命令：
 
@@ -74,6 +74,8 @@
   - 通过真实表单创建含 11 个字段的记录，保存后进入详情并逐项断言。
   - 搜索、筛选、移到回收站后活跃列表回空状态。
   - 删除后列表底部弹「已移入回收站 / 撤销」Snackbar，点撤销即恢复记录。
+- `OnboardingFlowTest`
+  - 首次启动展示引导页，点「开始使用」进入主列表；`onboardingSeen` 置位后重启跳过引导。
   - 编辑位置后保存，详情更新。
   - 条目默认进入「现场」媒体页；无附件时显示空状态；顶部「详细信息」进入完整详情。
   - 独立「备注」写入、详情展示、列表单行摘要、搜索命中。
@@ -123,6 +125,7 @@
 | 日期筛选（预设下拉 + 应用 + 清除） | 通过 | 首页「日期：全部」→ 下拉近 7/30/90 天 + 自定义；近 7 天应用后 chip 变「日期：自 10/28」并出现清除按钮；`date-filter-active.png` |
 | 日期自定义范围 DatePicker | 通过 | 「自定义范围」→ 系统日期选择器正常弹出（无崩溃）；`date-filter-custom-picker.png` |
 | 删除撤销 Snackbar（release 实机） | 通过 | 详情「移到回收站」→ 列表弹「已移入回收站 / 撤销」，撤销按钮上移避开 FAB；`delete-undo-snackbar.png` |
+| 首次引导（release 实机） | 通过 | 升级后首次打开显示权限说明页；「开始使用」进列表；重启跳过引导；`onboarding.png` |
 
 ### 相机说明
 
@@ -205,6 +208,7 @@
 - v1.5.0 → v1.6.0 覆盖安装成功；本版本新增加密备份与统计页，无数据库结构变化，旧记录保留（`MigrationSmoke` 仍显示）。加密往返由 `BackupManagerTest`（debug 与 API 26 均过）验证；R8 已对 zip4j 加 keep 规则。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.6.0 → v1.7.0 覆盖安装成功；本版本新增日期范围筛选，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.7.0 → v1.8.0 覆盖安装成功；本版本新增删除撤销 Snackbar，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.8.0 → v1.9.0 覆盖安装成功；本版本新增首次使用引导，无数据库结构变化，旧记录保留；升级后首次打开显示一次引导（`onboardingSeen` 默认 false）。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
@@ -221,6 +225,7 @@
 - `docs/screenshots/stats.png` / `export-password-dialog.png`
 - `docs/screenshots/date-filter-active.png` / `date-filter-custom-picker.png`
 - `docs/screenshots/delete-undo-snackbar.png`
+- `docs/screenshots/onboarding.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
