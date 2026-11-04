@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.11.0
+版本：1.12.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -10,11 +10,11 @@
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
 | JVM 单元测试 | 43 / 43 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 35 项（34 全量通过；`CameraFlowTest.captureVideoAddsPendingAttachment` 整批偶发超时、单独 2/2 通过） | `app/build/reports/androidTests/connected/debug/` |
-| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 21 / 21 通过 | 独立 `LouJiAudit26` 模拟器 |
+| 仪器化测试（API 35） | 36 / 36 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 22 / 22 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T18-29-50.795Z-e776963d24e7` |
-| Release APK | 已签名（v1.11.0，versionCode 22） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T18-55-53.738Z-5b3f5834f07f` |
+| Release APK | 已签名（v1.12.0，versionCode 23） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -41,7 +41,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 43 / 43 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（35，API 35 模拟器）
+## 3. 仪器化测试（36，API 35 模拟器）
 
 命令：
 
@@ -69,6 +69,7 @@
   - 拒绝超过 16MB 的 `records.json`，在 JSON 解析前终止。
   - 加密导出/导入往返（AES-256，含媒体文件）。
   - 加密备份密码错误、密码缺失、明文备份带密码均被明确拒绝。
+  - 图片导入后生成缩略图（`thumbPath` 非空且文件存在）。
 - `DatabaseMigrationTest`
   - 用 Room `MigrationTestHelper` 创建 v2 数据库，插入旧记录，执行 `MIGRATION_2_3` 并校验 `climbNote` 自动补为空串、旧字段保留。
   - 创建 v3 数据库，执行 `MIGRATION_3_4` 并校验 `archived` 默认 0、旧字段保留。
@@ -218,6 +219,7 @@
 - v1.8.0 → v1.9.0 覆盖安装成功；本版本新增首次使用引导，无数据库结构变化，旧记录保留；升级后首次打开显示一次引导（`onboardingSeen` 默认 false）。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.9.0 → v1.10.0 覆盖安装成功；本版本新增批量操作（多选归档/移回收站），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.10.0 → v1.11.0 覆盖安装成功；本版本新增重复记录合并，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.11.0 → v1.12.0 覆盖安装成功；本版本新增图片缩略图预生成，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
