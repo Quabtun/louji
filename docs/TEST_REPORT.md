@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.10.0
+版本：1.11.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,12 +9,12 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 38 / 38 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 33 / 33 通过 | `app/build/reports/androidTests/connected/debug/` |
-| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 20 / 20 通过 | 独立 `LouJiAudit26` 模拟器 |
+| JVM 单元测试 | 43 / 43 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 35 项（34 全量通过；`CameraFlowTest.captureVideoAddsPendingAttachment` 整批偶发超时、单独 2/2 通过） | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 21 / 21 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T18-02-45.697Z-30e3b5a5625f` |
-| Release APK | 已签名（v1.10.0，versionCode 21） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T18-29-50.795Z-e776963d24e7` |
+| Release APK | 已签名（v1.11.0，versionCode 22） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -37,10 +37,11 @@
 - `InstallTargetTest`：Ready 与 NeedsPermission 都能解析出安装目标，其他状态返回 null（权限重试回归测试）。
 - `DateRangePresetsTest`：滚动窗口起始、空范围判定、UTC→本地自然日换算、跨时区对齐、次日边界。
 - `DeleteUndoControllerTest`：announce/consume 循环、重复删除 nonce 递增。
+- `RecordMergerTest`：订单号优先/位置兜底的重复键、位置-only 不可合并、重复分组、字段合并（标签并集/补空/UNKNOWN 升级）。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 38 / 38 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 43 / 43 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（33，API 35 模拟器）
+## 3. 仪器化测试（35，API 35 模拟器）
 
 命令：
 
@@ -58,6 +59,7 @@
   - 洞察聚合：全周期决策分布与按位置聚合（免爬/会下来），归档记录不参与。
   - 日期范围：`observeFilteredByDate` 按 `createdAt` 起止过滤，与无界/近 7 天/近 30 天/显式区间断言一致。
   - 批量：`setArchivedForIds` / `setDeletedAtForIds` 按 id 集合批量归档/软删除，主列表与回收站视图正确反映。
+  - 附件改挂：`reparentAttachments` 把一条记录的附件整体改挂到另一条。
 - `BackupManagerTest`
   - 导出 → 导入往返：字段、标签、媒体文件均恢复。
   - 合并导入对相同签名的记录去重。
@@ -76,6 +78,7 @@
   - 搜索、筛选、移到回收站后活跃列表回空状态。
   - 删除后列表底部弹「已移入回收站 / 撤销」Snackbar，点撤销即恢复记录。
   - 多选后批量归档：选中一条 → 归档 → 活跃空、已归档视图可见。
+  - 合并重复：设置「合并重复记录」→ 预览「发现 1 组重复」→ 合并 → 提示「已合并 1 条」。
 - `OnboardingFlowTest`
   - 首次启动展示引导页，点「开始使用」进入主列表；`onboardingSeen` 置位后重启跳过引导。
   - 编辑位置后保存，详情更新。
@@ -129,6 +132,7 @@
 | 删除撤销 Snackbar（release 实机） | 通过 | 详情「移到回收站」→ 列表弹「已移入回收站 / 撤销」，撤销按钮上移避开 FAB；`delete-undo-snackbar.png` |
 | 首次引导（release 实机） | 通过 | 升级后首次打开显示权限说明页；「开始使用」进列表；重启跳过引导；`onboarding.png` |
 | 批量归档（release 实机） | 通过 | 多选 → 勾选记录 → 归档 → 活跃空、已归档可见；`batch-selection.png` |
+| 合并重复入口（release 实机） | 通过 | 设置 → 合并重复记录 → 弹预览对话框（无重复时提示「没有发现重复记录」）；合并逻辑由 `mergeDuplicatesFlow` 仪器化测试覆盖 |
 
 ### 相机说明
 
@@ -213,6 +217,7 @@
 - v1.7.0 → v1.8.0 覆盖安装成功；本版本新增删除撤销 Snackbar，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.8.0 → v1.9.0 覆盖安装成功；本版本新增首次使用引导，无数据库结构变化，旧记录保留；升级后首次打开显示一次引导（`onboardingSeen` 默认 false）。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.9.0 → v1.10.0 覆盖安装成功；本版本新增批量操作（多选归档/移回收站），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.10.0 → v1.11.0 覆盖安装成功；本版本新增重复记录合并，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
