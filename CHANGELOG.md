@@ -1,5 +1,15 @@
 # 变更记录
 
+## v1.15.0 — 2026-11-05
+
+P2 自动备份/提醒（本地周期提醒）。
+
+- 设置「数据」区新增「每周备份提醒」开关（默认开）；超过一周未导出备份时，启动后弹一次「备份提醒」。
+- 「去备份」直达设置；「稍后」顺延一周；每次成功导出备份自动重置计时。
+- 纯函数 `BackupReminder.shouldRemind` + DataStore `backupReminderEnabled`/`lastBackupAt`；仅本机判断、不联网。
+- 测试 `DisableUpdateRule` 归一化关闭提醒避免干扰 Compose 测试；新增 `BackupReminderTest` JVM 测试；JVM 测试增至 47 项。
+- 无数据库结构变化。
+
 ## v1.14.0 — 2026-11-05
 
 P1 崩溃可观测性（本地脱敏诊断日志）。

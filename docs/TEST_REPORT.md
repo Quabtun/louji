@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
 日期：2026-11-05
-版本：1.14.0
+版本：1.15.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,12 +9,12 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 45 / 45 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 39 / 39 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 47 / 47 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 39 项（38 全量通过；`CameraFlowTest.captureVideoAddsPendingAttachment` 整批偶发超时、单独 2/2 通过） | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26） | DAO + 迁移 + 备份加密 22 / 22 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T19-29-58.061Z-adad6440d3d0` |
-| Release APK | 已签名（v1.14.0，versionCode 25） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T19-50-54.038Z-98af57ee8d71` |
+| Release APK | 已签名（v1.15.0，versionCode 26） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -39,8 +39,9 @@
 - `DeleteUndoControllerTest`：announce/consume 循环、重复删除 nonce 递增。
 - `RecordMergerTest`：订单号优先/位置兜底的重复键、位置-only 不可合并、重复分组、字段合并（标签并集/补空/UNKNOWN 升级）。
 - `DiagnosticLogSanitizeTest`：日志消息去换行/回车（防日志注入），普通文本不变。
+- `BackupReminderTest`：超一周/从未备份触发提醒、近期或关闭时不提醒。
 
-> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 45 / 45 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
+> Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 47 / 47 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
 ## 3. 仪器化测试（39，API 35 模拟器）
 
@@ -227,6 +228,7 @@
 - v1.11.0 → v1.12.0 覆盖安装成功；本版本新增图片缩略图预生成，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.12.0 → v1.13.0 覆盖安装成功；本版本新增可访问性语义（搜索框可访问名 + 语义测试），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.13.0 → v1.14.0 覆盖安装成功；本版本新增本地脱敏诊断日志与导出，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.14.0 → v1.15.0 覆盖安装成功；本版本新增每周备份提醒，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
