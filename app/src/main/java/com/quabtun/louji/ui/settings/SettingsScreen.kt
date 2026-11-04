@@ -38,6 +38,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -65,6 +66,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quabtun.louji.R
@@ -100,16 +102,22 @@ fun SettingsScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var showExportPasswordDialog by remember { mutableStateOf(false) }
+    var exportPassword by remember { mutableStateOf("") }
+    var importPassword by remember { mutableStateOf("") }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
-        uri?.let(viewModel::export)
+        uri?.let { viewModel.export(it, exportPassword.ifBlank { null }) }
     }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) pendingImportUri = uri
+        if (uri != null) {
+            importPassword = ""
+            pendingImportUri = uri
+        }
     }
     val lockConfirmLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -221,11 +229,9 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 SettingsRow(
                     title = "导出备份",
-                    subtitle = "打包记录和全部附件为 zip，包含客户信息，请妥善保管",
+                    subtitle = "打包记录和全部附件为 zip；可设密码加密，包含客户信息，请妥善保管",
                     icon = R.drawable.ic_export,
-                    onClick = {
-                        exportLauncher.launch(backupFileName())
-                    },
+                    onClick = { showExportPasswordDialog = true },
                 )
                 SettingsRow(
                     title = "导入备份",
@@ -384,16 +390,27 @@ fun SettingsScreen(
             onDismissRequest = { pendingImportUri = null },
             title = { Text("导入备份") },
             text = {
-                Text(
-                    "合并：保留现有记录，跳过相同记录。\n覆盖：先删除本机现有记录和附件，再导入备份。",
-                )
+                Column {
+                    Text("合并：保留现有记录，跳过相同记录。\n覆盖：先删除本机现有记录和附件，再导入备份。")
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = importPassword,
+                        onValueChange = { importPassword = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("import_password"),
+                        label = { Text("备份密码（加密备份才需要）") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         val uri = pendingImportUri
                         pendingImportUri = null
-                        uri?.let { viewModel.import(it, ImportMode.MERGE) }
+                        uri?.let { viewModel.import(it, ImportMode.MERGE, importPassword.ifBlank { null }) }
                     },
                 ) { Text("合并导入") }
             },
@@ -402,11 +419,55 @@ fun SettingsScreen(
                     onClick = {
                         val uri = pendingImportUri
                         pendingImportUri = null
-                        uri?.let { viewModel.import(it, ImportMode.OVERWRITE) }
+                        uri?.let { viewModel.import(it, ImportMode.OVERWRITE, importPassword.ifBlank { null }) }
                     },
                 ) {
                     Text("覆盖导入", color = MaterialTheme.colorScheme.error)
                 }
+            },
+        )
+    }
+
+    if (showExportPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showExportPasswordDialog = false
+                exportPassword = ""
+            },
+            title = { Text("导出备份") },
+            text = {
+                Column {
+                    Text(
+                        "留空则导出明文 zip；填写密码则用 AES-256 加密，导入时需输入相同密码。",
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = exportPassword,
+                        onValueChange = { exportPassword = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("export_password"),
+                        label = { Text("备份密码（可选）") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExportPasswordDialog = false
+                        exportLauncher.launch(backupFileName())
+                    },
+                ) { Text("导出") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showExportPasswordDialog = false
+                        exportPassword = ""
+                    },
+                ) { Text("取消") }
             },
         )
     }

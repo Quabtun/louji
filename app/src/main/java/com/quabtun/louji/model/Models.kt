@@ -41,6 +41,27 @@ data class RecordStats(
     val willComeDown: Int = 0,
 )
 
+data class DecisionStats(
+    val total: Int = 0,
+    val noStairs: Int = 0,
+    val stairs: Int = 0,
+    val unknown: Int = 0,
+    val willComeDown: Int = 0,
+    val wontComeDown: Int = 0,
+)
+
+data class LocationStat(
+    val location: String = "",
+    val total: Int = 0,
+    val noStairs: Int = 0,
+    val willComeDown: Int = 0,
+)
+
+data class RecordInsights(
+    val decision: DecisionStats = DecisionStats(),
+    val locations: List<LocationStat> = emptyList(),
+)
+
 data class MediaDraft(
     val type: MediaType,
     val filePath: String,

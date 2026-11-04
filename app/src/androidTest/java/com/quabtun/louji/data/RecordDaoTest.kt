@@ -156,6 +156,30 @@ class RecordDaoTest {
         assertTrue(activeId > 0)
     }
 
+    @Test
+    fun insightsAggregateDecisionsAndLocations() = runBlocking {
+        recordDao.insert(record("阳光花园", "1", noStairs = TriState.YES, willComeDown = TriState.YES))
+        recordDao.insert(record("阳光花园", "2", noStairs = TriState.NO, willComeDown = TriState.NO))
+        recordDao.insert(record("老小区", "3", noStairs = TriState.NO, willComeDown = TriState.YES))
+        val archivedId = recordDao.insert(record("归档小区", "9", noStairs = TriState.YES))
+        recordDao.setArchived(archivedId, true)
+
+        val decision = recordDao.observeDecisionStats().first()
+        assertEquals(3, decision.total)
+        assertEquals(1, decision.noStairs)
+        assertEquals(2, decision.stairs)
+        assertEquals(0, decision.unknown)
+        assertEquals(2, decision.willComeDown)
+        assertEquals(1, decision.wontComeDown)
+
+        val locations = recordDao.observeLocationStats().first()
+        assertEquals(listOf("阳光花园", "老小区"), locations.map { it.location })
+        val sunny = locations.first { it.location == "阳光花园" }
+        assertEquals(2, sunny.total)
+        assertEquals(1, sunny.noStairs)
+        assertEquals(1, sunny.willComeDown)
+    }
+
     private fun record(
         location: String,
         orderNo: String,

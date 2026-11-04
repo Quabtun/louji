@@ -23,8 +23,8 @@ android {
         applicationId = "com.quabtun.louji"
         minSdk = 24
         targetSdk = 34
-        versionCode = 16
-        versionName = "1.5.0"
+        versionCode = 17
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -145,6 +145,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.zip4j)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

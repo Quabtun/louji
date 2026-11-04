@@ -20,3 +20,7 @@
 # Room
 -keep class * extends androidx.room.RoomDatabase
 -dontwarn androidx.room.paging.**
+
+# zip4j (AES-256 加密备份)
+-keep class net.lingala.zip4j.** { *; }
+-dontwarn net.lingala.zip4j.**

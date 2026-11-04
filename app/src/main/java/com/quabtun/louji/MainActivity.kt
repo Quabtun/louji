@@ -52,6 +52,8 @@ import com.quabtun.louji.ui.media.MediaViewerViewModel
 import com.quabtun.louji.ui.media.RecordMediaViewModel
 import com.quabtun.louji.ui.settings.SettingsScreen
 import com.quabtun.louji.ui.settings.SettingsViewModel
+import com.quabtun.louji.ui.stats.StatsScreen
+import com.quabtun.louji.ui.stats.StatsViewModel
 import com.quabtun.louji.ui.theme.LouJiTheme
 import com.quabtun.louji.ui.update.UpdateSheet
 import com.quabtun.louji.ui.update.UpdateUiState
@@ -74,6 +76,7 @@ private const val ROUTE_DETAIL = "detail/{recordId}"
 private const val ROUTE_RECORD_MEDIA = "record-media/{recordId}"
 private const val ROUTE_VIEWER = "viewer/{recordId}?index={index}"
 private const val ROUTE_SETTINGS = "settings"
+private const val ROUTE_STATS = "stats"
 private const val GITHUB_URL = "https://github.com/Quabtun/louji"
 
 @Composable
@@ -138,6 +141,7 @@ private fun LouJiRoot(container: AppContainer) {
                         onOpenMedia = { id -> navController.navigate("record-media/$id") },
                         onOpenDetail = { id -> navController.navigate("detail/$id") },
                         onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
+                        onOpenStats = { navController.navigate(ROUTE_STATS) },
                     )
                 }
                 composable(
@@ -237,6 +241,13 @@ private fun LouJiRoot(container: AppContainer) {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))
                             runCatching { context.startActivity(intent) }
                         },
+                    )
+                }
+                composable(ROUTE_STATS) {
+                    val viewModel: StatsViewModel = viewModel(factory = factory)
+                    StatsScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
                     )
                 }
             }

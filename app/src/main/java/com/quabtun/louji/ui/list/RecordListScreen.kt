@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -112,6 +113,7 @@ fun RecordListScreen(
     onOpenMedia: (Long) -> Unit,
     onOpenDetail: (Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenStats: () -> Unit,
 ) {
     val records by viewModel.records.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
@@ -191,7 +193,7 @@ fun RecordListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                 if (!showTrash) {
-                    item { StatsStrip(stats) }
+                    item { StatsStrip(stats, onOpenStats) }
                     item {
                         SearchField(
                             query = query,
@@ -312,12 +314,14 @@ fun RecordListScreen(
 }
 
 @Composable
-private fun StatsStrip(stats: RecordStats) {
+private fun StatsStrip(stats: RecordStats, onOpenStats: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         HorizontalDivider(color = LocalLouJiStatusColors.current.rule)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onOpenStats)
+                .testTag("stats_entry")
                 .padding(vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -326,6 +330,13 @@ private fun StatsStrip(stats: RecordStats) {
             StatCell("免爬", stats.noStairs, Modifier.weight(1f))
             StatDivider()
             StatCell("会下楼", stats.willComeDown, Modifier.weight(1f))
+            Spacer(Modifier.width(2.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "查看统计",
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         HorizontalDivider(color = LocalLouJiStatusColors.current.rule)
     }

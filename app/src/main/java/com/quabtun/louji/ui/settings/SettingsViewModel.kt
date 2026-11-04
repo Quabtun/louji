@@ -54,11 +54,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun export(uri: Uri) {
+    fun export(uri: Uri, password: String?) {
         viewModelScope.launch {
             _backup.value = BackupUiState(running = true, progress = 0f)
             try {
-                val manifest = container.backup.exportBackup(uri) { done, total ->
+                val manifest = container.backup.exportBackup(uri, password) { done, total ->
                     _backup.value = BackupUiState(
                         running = true,
                         progress = (done.toFloat() / maxOf(total, 1)).coerceIn(0f, 1f),
@@ -77,11 +77,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun import(uri: Uri, mode: ImportMode) {
+    fun import(uri: Uri, mode: ImportMode, password: String? = null) {
         viewModelScope.launch {
             _backup.value = BackupUiState(running = true, progress = 0f)
             try {
-                val summary = container.backup.importBackup(uri, mode) { done, total ->
+                val summary = container.backup.importBackup(uri, mode, password) { done, total ->
                     _backup.value = BackupUiState(
                         running = true,
                         progress = (done.toFloat() / maxOf(total, 1)).coerceIn(0f, 1f),

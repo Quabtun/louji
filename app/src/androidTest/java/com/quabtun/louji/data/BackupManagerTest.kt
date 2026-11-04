@@ -188,6 +188,77 @@ class BackupManagerTest {
         }
     }
 
+    @Test
+    fun encryptedExportImportRoundTrip() = runBlocking {
+        val image = File(root, "enc-source.png").apply {
+            writeBytes(Base64.decode(ONE_PIXEL_PNG, Base64.DEFAULT))
+        }
+        repositoryA.save(
+            draft = RecordDraft(
+                location = "加密花园",
+                orderNo = "E1",
+                noStairs = com.quabtun.louji.model.TriState.YES,
+                remark = "加密备注",
+            ),
+            recordId = null,
+            pendingMedia = listOf(
+                MediaDraft(
+                    type = MediaType.IMAGE,
+                    filePath = image.absolutePath,
+                    thumbPath = null,
+                    mimeType = "image/png",
+                    sizeBytes = image.length(),
+                    durationMs = 0,
+                ),
+            ),
+        )
+        val zip = File(root, "encrypted.zip")
+        val rightPassword = testPassword("right")
+        backupA.exportBackup(Uri.fromFile(zip), password = rightPassword)
+
+        val summary = backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE, password = rightPassword)
+        assertEquals(1, summary.imported)
+        assertEquals(1, summary.media)
+        val imported = repositoryB.allRecords().single()
+        assertEquals("加密花园", imported.record.location)
+        assertEquals("加密备注", imported.record.remark)
+        assertEquals(1, imported.attachments.size)
+        assertTrue(File(imported.attachments.single().filePath).isFile)
+    }
+
+    @Test
+    fun encryptedBackupRejectsWrongPassword(): Unit = runBlocking {
+        val zip = File(root, "enc-wrong.zip")
+        backupA.exportBackup(Uri.fromFile(zip), password = testPassword("right"))
+        assertThrows(BackupException::class.java) {
+            runBlocking {
+                backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE, password = testPassword("wrong"))
+            }
+        }
+    }
+
+    @Test
+    fun encryptedBackupRequiresPassword(): Unit = runBlocking {
+        val zip = File(root, "enc-nopass.zip")
+        backupA.exportBackup(Uri.fromFile(zip), password = testPassword("right"))
+        assertThrows(BackupException::class.java) {
+            runBlocking { backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE) }
+        }
+    }
+
+    @Test
+    fun plainBackupRejectsPassword(): Unit = runBlocking {
+        val zip = File(root, "plain-reject.zip")
+        backupA.exportBackup(Uri.fromFile(zip))
+        assertThrows(BackupException::class.java) {
+            runBlocking {
+                backupB.importBackup(Uri.fromFile(zip), ImportMode.MERGE, password = testPassword("unused"))
+            }
+        }
+    }
+
+    private fun testPassword(label: String): String = "test-backup-$label"
+
     private companion object {
         const val ONE_PIXEL_PNG =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z3GQAAAAASUVORK5CYII="

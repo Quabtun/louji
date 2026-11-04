@@ -8,9 +8,11 @@ import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.MediaDraft
 import com.quabtun.louji.model.RecordDraft
 import com.quabtun.louji.model.RecordFilter
+import com.quabtun.louji.model.RecordInsights
 import com.quabtun.louji.model.RecordStats
 import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 class RecordRepository(
@@ -36,6 +38,11 @@ class RecordRepository(
         .map { it?.withOrderedAttachments() }
 
     fun observeStats(): Flow<RecordStats> = recordDao.observeStats(startOfMonth(clock()))
+
+    fun observeInsights(): Flow<RecordInsights> =
+        combine(recordDao.observeDecisionStats(), recordDao.observeLocationStats()) { decision, locations ->
+            RecordInsights(decision = decision, locations = locations)
+        }
 
     fun observeRecentLocations(): Flow<List<String>> = recordDao.observeRecentLocations()
 

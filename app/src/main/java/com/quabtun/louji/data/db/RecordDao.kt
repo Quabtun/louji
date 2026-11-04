@@ -5,6 +5,8 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.quabtun.louji.model.DecisionStats
+import com.quabtun.louji.model.LocationStat
 import com.quabtun.louji.model.RecordStats
 import kotlinx.coroutines.flow.Flow
 
@@ -69,6 +71,35 @@ interface RecordDao {
         """,
     )
     fun observeStats(since: Long): Flow<RecordStats>
+
+    @Query(
+        """
+        SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN noStairs = 'NO' THEN 1 ELSE 0 END), 0) AS stairs,
+            COALESCE(SUM(CASE WHEN noStairs = 'UNKNOWN' THEN 1 ELSE 0 END), 0) AS unknown,
+            COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown,
+            COALESCE(SUM(CASE WHEN willComeDown = 'NO' THEN 1 ELSE 0 END), 0) AS wontComeDown
+        FROM records
+        WHERE archived = 0 AND deletedAt = 0
+        """,
+    )
+    fun observeDecisionStats(): Flow<DecisionStats>
+
+    @Query(
+        """
+        SELECT location,
+            COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown
+        FROM records
+        WHERE archived = 0 AND deletedAt = 0 AND location != ''
+        GROUP BY location
+        ORDER BY total DESC, location ASC
+        LIMIT 20
+        """,
+    )
+    fun observeLocationStats(): Flow<List<LocationStat>>
 
     @Query(
         """

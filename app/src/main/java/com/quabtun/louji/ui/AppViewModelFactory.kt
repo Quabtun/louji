@@ -9,6 +9,7 @@ import com.quabtun.louji.ui.list.RecordListViewModel
 import com.quabtun.louji.ui.media.MediaViewerViewModel
 import com.quabtun.louji.ui.media.RecordMediaViewModel
 import com.quabtun.louji.ui.settings.SettingsViewModel
+import com.quabtun.louji.ui.stats.StatsViewModel
 import com.quabtun.louji.ui.update.UpdateViewModel
 
 class AppViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -31,6 +32,9 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
 
         modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
             SettingsViewModel(container) as T
+
+        modelClass.isAssignableFrom(StatsViewModel::class.java) ->
+            StatsViewModel(container.repository) as T
 
         modelClass.isAssignableFrom(UpdateViewModel::class.java) ->
             UpdateViewModel(container) as T
