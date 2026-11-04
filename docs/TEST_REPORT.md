@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
-日期：2026-11-02
-版本：1.4.0
+日期：2026-11-04
+版本：1.5.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -10,10 +10,11 @@
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
 | JVM 单元测试 | 31 / 31 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 20 / 20 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 35） | 22 / 22 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26） | DAO + 迁移 8 / 8 通过 | 独立 `LouJiAudit26` 模拟器 |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T14-29-50.814Z-b4033e280e13` |
-| Release APK | 已签名，3.9 MB（v1.4.0，versionCode 15） | `apksigner verify` 通过 |
+| Mimosa 深度安全扫描 | 0 findings，63 packages | `scan-2026-11-04T15-34-58.248Z-b315c3aebff1` |
+| Release APK | 已签名（v1.5.0，versionCode 16） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -37,7 +38,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 31 / 31 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（18，API 35 模拟器）
+## 3. 仪器化测试（22，API 35 模拟器）
 
 命令：
 
@@ -51,6 +52,7 @@
   - 记录 / 附件 1:N 关系；删除记录级联删除附件。
   - 位置、订单号、楼层、房号、尾号、性格标签搜索；要爬楼 / 免爬 / 会下来筛选。
   - 本月统计、最近位置聚合。
+  - 回收站：软删除后从活跃列表与统计/最近位置排除，可观察、可恢复；按 `deletedAt` 截止时间查询待清理记录。
 - `BackupManagerTest`
   - 导出 → 导入往返：字段、标签、媒体文件均恢复。
   - 合并导入对相同签名的记录去重。
@@ -61,9 +63,10 @@
 - `DatabaseMigrationTest`
   - 用 Room `MigrationTestHelper` 创建 v2 数据库，插入旧记录，执行 `MIGRATION_2_3` 并校验 `climbNote` 自动补为空串、旧字段保留。
   - 创建 v3 数据库，执行 `MIGRATION_3_4` 并校验 `archived` 默认 0、旧字段保留。
+  - 创建 v4 数据库，执行 `MIGRATION_4_5` 并校验 `deletedAt` 默认 0、`archived` 与旧字段保留。
 - `RecordFlowTest`
   - 通过真实表单创建含 11 个字段的记录，保存后进入详情并逐项断言。
-  - 搜索、筛选、删除记录回空状态。
+  - 搜索、筛选、移到回收站后活跃列表回空状态。
   - 编辑位置后保存，详情更新。
   - 条目默认进入「现场」媒体页；无附件时显示空状态；顶部「详细信息」进入完整详情。
   - 独立「备注」写入、详情展示、列表单行摘要、搜索命中。
@@ -105,6 +108,9 @@
 | 横屏 / 平板宽度（1600×2560 @240dpi） | 通过 | `home-landscape.png`；内容 760dp 居中，FAB 跟随内容列 |
 | Release APK 安装、建记录、备份导出/导入 | 通过 | R8 后序列化、Room、FileProvider 正常 |
 | v1.2.0 Release 安装、新建记录 | 通过 | 独立模拟器新建 `Release Smoke 1`，保存后详情正常 |
+| 移到回收站 → 回收站视图 → 恢复 | 通过 | API 35 release 实机流程：详情菜单「移到回收站」→ 回收站视图显示记录 → 详情「恢复」→ 活跃列表恢复；`recycle-trash-view.png`、`recycle-detail-menu.png` |
+| 回收站详情菜单（恢复 / 彻底删除） | 通过 | 回收站记录隐藏编辑入口，菜单仅「恢复 / 彻底删除」；`recycle-detail-menu.png` |
+| v1.4.0 → v1.5.0 覆盖安装迁移 | 通过 | v1.4.0 建 `MigrationSmoke` → 覆盖安装 v1.5.0 → 记录保留、新增「回收站」chip；`recycle-migrated.png` |
 
 ### 相机说明
 
@@ -183,6 +189,7 @@
 - v1.2.0 → v1.2.1 覆盖安装成功；本版本仅修复剪贴板异常兜底与 API 26 测试线程问题，无数据库结构变化。
 - v1.2.1 → v1.3.0 覆盖安装成功；本版本新增可选应用锁，锁状态存 DataStore，无数据库结构变化。
 - v1.3.0 → v1.4.0 覆盖安装成功；本版本新增记录归档与列表排序，Room v3→v4 迁移新增 `archived` 列，旧数据保留。本次模拟器对 `release-assets.githubusercontent.com` 下载出现 `Connection reset`，应用内下载未走完，改为本地同签名覆盖安装验证；下载逻辑此前已在 debug 构建中验证成功。
+- v1.4.0 → v1.5.0 覆盖安装成功；本版本新增回收站（软删除），Room v4→v5 迁移新增 `deletedAt` 列，旧数据保留（`MigrationSmoke` 记录在 v1.4.0 创建、v1.5.0 覆盖后仍显示）。本次仍采用本地同签名覆盖安装验证，应用内下载未走完（模拟器对 release-assets 下载 `Connection reset`，属环境/网络问题，非代码问题）。
 
 ## 7. 证据目录
 
@@ -195,6 +202,7 @@
 - `docs/screenshots/settings.png` / `settings-dark.png`
 - `docs/screenshots/viewer-photo.png` / `viewer-video.png`
 - `docs/screenshots/update-available.png` / `update-installer.png` / `update-installed.png`
+- `docs/screenshots/recycle-home.png` / `recycle-trash-view.png` / `recycle-detail-menu.png` / `recycle-migrated.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
