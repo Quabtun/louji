@@ -36,6 +36,9 @@ class LouJiApp : Application() {
             }.onFailure {
                 container.diagnostics.log("purge_trashed", "failed: ${it.message.orEmpty()}")
             }
+            runCatching {
+                container.backup.cleanupStaleCache()
+            }
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {

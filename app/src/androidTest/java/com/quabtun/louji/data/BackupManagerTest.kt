@@ -289,6 +289,41 @@ class BackupManagerTest {
         assertTrue(File(imported.thumbPath!!).isFile)
     }
 
+    @Test
+    fun cleanupStaleCacheRemovesOldTempsAndKeepsFresh() {
+        // backupA uses a fixed clock at 1_700_000_000_000L; align timestamps with it.
+        val now = 1_700_000_000_000L
+        val stale = now - 2 * 60 * 60 * 1000
+        val fresh = now - 10 * 60 * 1000
+        val staleFile = File(context.cacheDir, "louji-export-stale.zip").apply {
+            writeText("x")
+            setLastModified(stale)
+        }
+        val staleDir = File(context.cacheDir, "louji-import-stale").apply {
+            mkdirs()
+            File(this, "records.json").writeText("{}")
+            setLastModified(stale)
+        }
+        val freshFile = File(context.cacheDir, "louji-import-fresh").apply {
+            mkdirs()
+            setLastModified(fresh)
+        }
+        val untouched = File(context.cacheDir, "unrelated.txt").apply {
+            writeText("keep")
+            setLastModified(stale)
+        }
+
+        backupA.cleanupStaleCache()
+
+        assertFalse(staleFile.exists())
+        assertFalse(staleDir.exists())
+        assertTrue(freshFile.exists())
+        assertTrue(untouched.exists())
+
+        freshFile.deleteRecursively()
+        untouched.delete()
+    }
+
     private companion object {
         const val ONE_PIXEL_PNG =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z3GQAAAAASUVORK5CYII="

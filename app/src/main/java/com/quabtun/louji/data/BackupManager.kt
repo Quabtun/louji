@@ -48,6 +48,7 @@ class BackupManager(
         password: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): BackupManifest = withContext(Dispatchers.IO) {
+        cleanupStaleCache()
         val prepared = repository.allRecords().mapIndexed { recordIndex, item ->
             val files = item.attachments.mapIndexedNotNull { attachmentIndex, attachment ->
                 val source = File(attachment.filePath)
@@ -165,6 +166,7 @@ class BackupManager(
         password: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): ImportSummary = withContext(Dispatchers.IO) {
+        cleanupStaleCache()
         val encrypted = isEncryptedZip(uri)
         if (encrypted && password.isNullOrBlank()) {
             throw BackupException("这是加密备份，请输入密码")
@@ -319,6 +321,24 @@ class BackupManager(
             }
         } catch (_: Throwable) {
             false
+        }
+    }
+
+    /**
+     * Deletes leftover backup temp files (`louji-export-*` / `louji-import-*`) from a previous
+     * session that was killed mid-operation. Files younger than [olderThanMs] are kept so a
+     * concurrent backup is never disturbed. Called before each export/import.
+     */
+    fun cleanupStaleCache(olderThanMs: Long = STALE_CACHE_MS) {
+        val cutoff = clock() - olderThanMs
+        runCatching {
+            context.cacheDir.listFiles()?.forEach { file ->
+                val isBackupTemp = file.name.startsWith("louji-export-") ||
+                    file.name.startsWith("louji-import-")
+                if (isBackupTemp && file.lastModified() <= cutoff) {
+                    if (file.isDirectory) file.deleteRecursively() else file.delete()
+                }
+            }
         }
     }
 
@@ -587,5 +607,6 @@ class BackupManager(
         const val MAX_JSON_BYTES = 16L * 1024 * 1024
         const val MAX_SINGLE_FILE_BYTES = 500L * 1024 * 1024
         const val MAX_TOTAL_BYTES = 8L * 1024 * 1024 * 1024
+        const val STALE_CACHE_MS = 60L * 60 * 1000
     }
 }
