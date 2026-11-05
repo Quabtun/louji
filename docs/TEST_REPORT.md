@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
-日期：2026-11-05
-版本：1.19.0
+日期：2026-11-06
+版本：1.20.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -10,14 +10,14 @@
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
 | JVM 单元测试 | 48 / 48 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 40 / 40 通过 | `app/build/reports/androidTests/connected/debug/` |
-| 仪器化测试（API 26） | DAO + 迁移 + 备份加密 23 / 23 通过 | 独立 `LouJiAudit26` 模拟器 |
+| 仪器化测试（API 35） | 41 / 41 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26/25/24） | DAO + 迁移 + 备份加密 各 24 / 24 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
 | 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
-| Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-04T21-33-51.690Z-706cd273182f` |
+| Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | 已签名（v1.19.0，versionCode 30，约 45.4MB 含中文模型） | `apksigner verify` 通过 |
+| Release APK | 已签名（v1.20.0，versionCode 31，约 45.4MB 含中文模型） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -47,7 +47,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 48 / 48 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（40，API 35 模拟器）
+## 3. 仪器化测试（41，API 35 模拟器）
 
 命令：
 
@@ -77,6 +77,7 @@
   - 加密导出/导入往返（AES-256，含媒体文件）。
   - 加密备份密码错误、密码缺失、明文备份带密码均被明确拒绝。
   - 图片导入后生成缩略图（`thumbPath` 非空且文件存在）。
+  - 缓存残留清理：超龄 `louji-export-*` / `louji-import-*` 删除、未满龄保留、非备份缓存不动。
 - `DatabaseMigrationTest`
   - 用 Room `MigrationTestHelper` 创建 v2 数据库，插入旧记录，执行 `MIGRATION_2_3` 并校验 `climbNote` 自动补为空串、旧字段保留。
   - 创建 v3 数据库，执行 `MIGRATION_3_4` 并校验 `archived` 默认 0、旧字段保留。
@@ -242,6 +243,7 @@
 - v1.16.0 → v1.17.0 覆盖安装成功；本版本新增列表分页（Paging 3），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.17.0 → v1.18.0 覆盖安装成功；本版本完成可访问性 TalkBack 走查与 2.0× 字体验证并修复时间戳溢出，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 - v1.18.0 → v1.19.0 覆盖安装成功；本版本接入中文 OCR 模型（安装包约 45.4MB），无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
+- v1.19.0 → v1.20.0 覆盖安装成功；本版本新增备份缓存残留清理，无数据库结构变化，旧记录保留。应用内下载仍走本地同签名覆盖安装（release-assets 下载 `Connection reset`）。
 
 ## 7. 证据目录
 
