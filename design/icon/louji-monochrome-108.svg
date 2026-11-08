@@ -1,5 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
-  <g transform="translate(5.81,5.81) scale(0.09412)">
-    <path fill="#FFFFFF" fill-rule="evenodd" d="M172,726H852V298H452V454H312V598H172V726ZM572,726V462A80,80 0 0 1 732,462V726Z"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-labelledby="louji-mono-title">
+  <title id="louji-mono-title">楼记 Android 13 主题图标（全白剪影，门洞镂空）</title>
+  <defs>
+    <mask id="louji-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">
+      <rect width="108" height="108" fill="#000000"/>
+      <g fill="#FFFFFF" transform="scale(0.10546875)">
+        <rect x="276" y="682" width="140" height="60" rx="10"/>
+        <rect x="396" y="622" width="140" height="120" rx="10"/>
+        <rect x="516" y="562" width="232" height="180" rx="12"/>
+        <rect x="516" y="282" width="232" height="305" rx="16"/>
+      </g>
+      <path fill="#000000" transform="scale(0.10546875)" d="M558,562 V396 A74,74 0 0 1 706,396 V562 Z"/>
+    </mask>
+  </defs>
+  <rect width="108" height="108" fill="#FFFFFF" mask="url(#louji-cut)"/>
 </svg>

@@ -51,6 +51,7 @@ data class RecordEditUiState(
     val message: String? = null,
     val loadFailed: Boolean = false,
     val syncBuildingProfile: Boolean = true,
+    val recognizedFields: List<String> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -129,6 +130,7 @@ class RecordEditViewModel(
 
                 // Shared text (ACTION_SEND) is parsed once into the blank form.
                 val shared = shareIntake.payload.value
+                var sharedImageFailed = false
                 if (shared != null) {
                     shareIntake.consume()
                     shared.text?.let { draft = draft.mergedWith(ClipboardOrderParser.parse(it)) }
@@ -146,6 +148,8 @@ class RecordEditViewModel(
                                     ),
                                 )
                             }
+                        } else {
+                            sharedImageFailed = true
                         }
                     }
                 }
@@ -174,6 +178,7 @@ class RecordEditViewModel(
                         initialized = true,
                         isEditing = recordId != null,
                         loadFailed = false,
+                        message = if (sharedImageFailed) "分享的图片无法读取，可重新添加" else it.message,
                     )
                 }
             } catch (error: CancellationException) {
@@ -345,6 +350,7 @@ class RecordEditViewModel(
                 _ui.update {
                     it.copy(
                         recognizing = false,
+                        recognizedFields = parsed.labels(),
                         message = "已识别并填入：" + parsed.labels().joinToString("、"),
                     )
                 }
@@ -361,6 +367,7 @@ class RecordEditViewModel(
             val base = if (overwrite) this else this
             base.mergedWith(parsed, onlyBlank = !overwrite)
         }
+        _ui.update { it.copy(recognizedFields = parsed.labels()) }
     }
 
     fun applyVoiceText(text: String) {

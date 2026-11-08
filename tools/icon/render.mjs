@@ -48,7 +48,7 @@ const bg = await sharp({
     width: previewSize,
     height: previewSize,
     channels: 4,
-    background: '#121517',
+    background: '#141923',
   },
 }).png().toBuffer();
 const fg = await sharp(foreground, { density: 384 })

@@ -7,6 +7,7 @@ import com.quabtun.louji.data.DeleteUndoController
 import com.quabtun.louji.data.DiagnosticLog
 import com.quabtun.louji.data.ShareIntake
 import com.quabtun.louji.data.LocalMediaStore
+import com.quabtun.louji.data.OrderAutoSaver
 import com.quabtun.louji.data.OrderTextRecognizer
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.SettingsStore
@@ -23,6 +24,7 @@ class AppContainer(private val context: Context) {
     val database: LouJiDatabase = LouJiDatabase.build(context)
     val mediaStore = LocalMediaStore(context)
     val repository = RecordRepository(database, mediaStore)
+    val orderAutoSaver = OrderAutoSaver(repository, mediaStore)
     val settings = SettingsStore(context)
     val backup = BackupManager(context, repository, mediaStore)
     val updater = GitHubUpdater(context)

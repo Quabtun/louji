@@ -88,6 +88,7 @@ class RecordRepository(
         pendingMedia: List<MediaDraft>,
         removedAttachmentIds: Set<Long> = emptySet(),
         syncBuildingProfile: Boolean = false,
+        syncProfile: Boolean = true,
     ): Long {
         val now = clock()
         val removed = if (removedAttachmentIds.isEmpty()) {
@@ -177,7 +178,7 @@ class RecordRepository(
                 )
             }
 
-            if (location.isNotBlank()) {
+            if (location.isNotBlank() && syncProfile) {
                 upsertBuildingProfile(location, draft, overwrite = syncBuildingProfile, now = now)
             }
             id

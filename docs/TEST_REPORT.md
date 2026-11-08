@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
-日期：2026-11-06
-版本：1.20.0
+日期：2026-11-09
+版本：2.1.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,18 +9,18 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 58 / 58 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 43 / 43 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 59 / 59 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 51 / 51 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26/24） | DAO + 迁移（含 5→6）+ 备份加密 各 25 / 25 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
 | 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | 已签名（v2.0.0，versionCode 32，约 45.5MB 含中文模型） | `apksigner verify` 通过 |
+| Release APK | v2.0.1 已签名（versionCode 33，约 45.5MB 含中文模型）；2.1.0 通过 `assembleDebug` | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
-## 2. 单元测试（24）
+## 2. 单元测试（59）
 
 命令：
 
@@ -44,10 +44,11 @@
 - `DiagnosticLogSanitizeTest`：日志消息去换行/回车（防日志注入），普通文本不变。
 - `BackupReminderTest`：超一周/从未备份触发提醒、近期或关闭时不提醒。
 - `ClipboardOrderParserTest` 增「OCR 风格噪声文本」：吞空格/多余空行仍正确解析订单号/地址/楼层/房号/尾号。
+- `ClipboardOrderParserTest` 增「单行带标签文本」：地址在楼层/房号/订单号/尾号处截断，不再吞掉整行（2.1.0）。
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 48 / 48 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（43，API 35 模拟器）
+## 3. 仪器化测试（51，API 35 模拟器）
 
 命令：
 
@@ -88,6 +89,13 @@
   - 删除后列表底部弹「已移入回收站 / 撤销」Snackbar，点撤销即恢复记录。
   - 多选后批量归档：选中一条 → 归档 → 活跃空、已归档视图可见。
   - 合并重复：设置「合并重复记录」→ 预览「发现 1 组重复」→ 合并 → 提示「已合并 1 条」。
+  - 首页「粘贴秒存」→ 自动入库 → 「已自动保存」Snackbar → 撤销后列表回空（2.1.0）。
+  - 粘贴运单后断言「识别结果」胶囊与「已提取 6 项」；缺楼层/房号时断言「待补：楼层、房号」（2.1.0）。
+- `OrderAutoSaveTest`（2.1.0）
+  - 纯文本落库：位置/订单号/尾号/楼层/房号正确，决策保持待确认。
+  - 带截图落库：图片拷入私有目录并生成 1 条 `ORDER_SCREENSHOT` 附件。
+  - 楼栋档案继承：门禁密码/电梯类型/门锁/远程开门补齐，直达电梯推断免爬。
+  - 「步梯 / 无电梯」关键字推断要爬楼；位置缺省时回退到首行文本，完全无位置时用「未知楼栋-待确认」占位且不新建楼栋档案。
 - `OnboardingFlowTest`
   - 首次启动展示引导页，点「开始使用」进入主列表；`onboardingSeen` 置位后重启跳过引导。
 - `AccessibilitySemanticsTest`
@@ -264,6 +272,7 @@
 - `docs/screenshots/batch-selection.png`
 - `docs/ACCESSIBILITY.md`
 - `docs/screenshots/v2-home.png` / `v2-buildings.png` / `v2-insights.png` / `v2-me.png`
+- `docs/screenshots/v2.1-quick-entry.png` / `v2.1-share-auto-save.png` / `v2.1-ocr-fallback.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
@@ -290,3 +299,11 @@
 - 楼栋链路：`BuildingFlowTest` 验证保存记录→自动生成楼栋档案→楼栋库列表→详情历史房号与门禁徽章。
 - 交互升级导致的测试适配：详情页替换现场页作为卡片默认落点；视图切换移入筛选抽屉；分段选择器改用 `*_index` testTag；底部导航用 `tab_*` testTag。
 - 修复：详情页在 `Column` 内容中提前 `return@Column` 会触发 Compose SlotTable 崩溃（`index=-5`），改为 if/else 分支后恢复；设置页重复记录弹窗漏收集 StateFlow 导致不刷新，已改为 `collectAsStateWithLifecycle`。
+
+## 10. v2.1.0 极速秒存验证补充（2026-11-09）
+
+- `OrderAutoSaveTest`（5 项，API 35）：纯文本落库；截图落库并生成 `ORDER_SCREENSHOT` 附件；楼栋档案继承门禁/电梯/门锁/远程开门并推断免爬；步梯关键字推断要爬楼；位置缺省回退首行。
+- `RecordFlowTest.quickPasteSavesRecordAndUndoRemovesIt`：首页「粘贴秒存」→ 自动入库 → Snackbar「已自动保存」→「撤销」→ 列表回空。
+- `RecordFlowTest.pasteOrderFromClipboardFillsFields` 增断言：识别结果胶囊「已提取 6 项」。
+- 模拟器手工走查：分享文字后直达详情（`v2.1-share-auto-save.png`）；关闭自动保存后分享只预填表单；无文字图片回退手动建单并挂订单截图（`v2.1-ocr-fallback.png`）；首页秒存按钮与空剪贴板提示（`v2.1-quick-entry.png`）。
+- 全量结果：JVM 59 / 59，API 35 仪器化 51 / 51，`:app:assembleDebug` 通过。

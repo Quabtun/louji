@@ -13,11 +13,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -27,6 +32,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -52,6 +59,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.quabtun.louji.data.AppSettings
+import com.quabtun.louji.data.OrderAutoSaver
 import com.quabtun.louji.data.SharePayload
 import com.quabtun.louji.model.BackupReminder
 import com.quabtun.louji.ui.AppViewModelFactory
@@ -79,6 +87,8 @@ import com.quabtun.louji.ui.theme.LouJiTheme
 import com.quabtun.louji.ui.update.UpdateSheet
 import com.quabtun.louji.ui.update.UpdateUiState
 import com.quabtun.louji.ui.update.UpdateViewModel
+import com.quabtun.louji.util.ClipboardOrderParser
+import com.quabtun.louji.util.ParsedOrder
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -168,6 +178,7 @@ private fun LouJiRoot(
     var showBackupReminder by remember { mutableStateOf(false) }
     var searchFocusTick by remember { mutableIntStateOf(0) }
     var pasteRequestTick by remember { mutableIntStateOf(0) }
+    var shareBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         container.settings.settings.collect {
@@ -228,10 +239,61 @@ private fun LouJiRoot(
             }
         }
 
-        LaunchedEffect(shareTick) {
-            if (shareTick > 0) {
-                navController.navigate(editRoute())
+        suspend fun saveSharedOrder(payload: SharePayload): OrderAutoSaver.Saved {
+            val text = payload.text?.trim().orEmpty()
+            val fromText = if (text.isNotEmpty()) {
+                ClipboardOrderParser.parse(text)
+            } else {
+                ParsedOrder()
             }
+            val ocrText = payload.imageUri?.let { uri ->
+                runCatching { container.orderTextRecognizer.recognize(uri) }.getOrDefault("")
+            }.orEmpty()
+            val fromImage = if (ocrText.isNotBlank()) {
+                ClipboardOrderParser.parse(ocrText)
+            } else {
+                ParsedOrder()
+            }
+            val parsed = if (!fromText.isEmpty) fromText.fillMissingFrom(fromImage) else fromImage
+            if (parsed.isEmpty) error("empty order")
+            return container.orderAutoSaver.save(
+                parsed = parsed,
+                screenshotUri = payload.imageUri,
+                sourceLabel = if (payload.imageUri != null) "分享截图" else "分享文字",
+                rawText = listOf(text, ocrText).filter { it.isNotBlank() }.joinToString("\n"),
+            )
+        }
+
+        LaunchedEffect(shareTick) {
+            if (shareTick == 0) return@LaunchedEffect
+            val payload = container.shareIntake.payload.value ?: return@LaunchedEffect
+            if (!settings.autoSaveOrders) {
+                // Leave the payload for the edit form, which pre-fills and stays open for review.
+                navController.navigate(editRoute())
+                return@LaunchedEffect
+            }
+            container.shareIntake.consume()
+            shareBusy = true
+            val result = runCatching { saveSharedOrder(payload) }
+            shareBusy = false
+            result.fold(
+                onSuccess = { saved ->
+                    navController.navigate("detail/${saved.recordId}") {
+                        popUpTo(ROUTE_LEDGER)
+                    }
+                    scope.launch {
+                        snackbarHostState.showSnackbar("已自动保存：${saved.label()}")
+                    }
+                },
+                onFailure = {
+                    // Hand the screenshot/text back to the form so nothing the rider shared is lost.
+                    container.shareIntake.submit(payload)
+                    navController.navigate(editRoute())
+                    scope.launch {
+                        snackbarHostState.showSnackbar("未识别出有效订单信息，已为你打开手动建单")
+                    }
+                },
+            )
         }
         LaunchedEffect(shortcutTick) {
             if (shortcutTick > 0) {
@@ -279,6 +341,15 @@ private fun LouJiRoot(
                                 },
                                 onDuplicate = { id ->
                                     navController.navigate(editRoute(duplicateId = id))
+                                },
+                                onQuickEdit = { text, imageUri, message ->
+                                    if (message != null) {
+                                        scope.launch { snackbarHostState.showSnackbar(message) }
+                                    }
+                                    container.shareIntake.submit(
+                                        SharePayload(text = text, imageUri = imageUri),
+                                    )
+                                    navController.navigate(editRoute())
                                 },
                                 focusSearch = searchFocusTick > 0,
                             )
@@ -504,6 +575,33 @@ private fun LouJiRoot(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp),
             )
+
+            if (shareBusy) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 6.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text("正在识别并保存…", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
         }
 
         LaunchedEffect(settingsReady) {

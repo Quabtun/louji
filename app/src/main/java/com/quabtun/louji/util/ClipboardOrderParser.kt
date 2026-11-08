@@ -32,6 +32,20 @@ data class ParsedOrder(
         }
     }
 
+    /** Fills values missing here from a second parse (shared text + OCR of the same order). */
+    fun fillMissingFrom(other: ParsedOrder): ParsedOrder = copy(
+        location = location ?: other.location,
+        orderNo = orderNo ?: other.orderNo,
+        phoneTail = phoneTail ?: other.phoneTail,
+        phoneExt = phoneExt ?: other.phoneExt,
+        floor = floor ?: other.floor,
+        roomNo = roomNo ?: other.roomNo,
+        gender = gender ?: other.gender,
+        deliveryMethod = deliveryMethod?.takeIf { it != DeliveryMethod.UNKNOWN }
+            ?: other.deliveryMethod,
+        remarkHint = remarkHint ?: other.remarkHint,
+    )
+
     fun summary(): String = buildList {
         location?.let { add("位置：$it") }
         orderNo?.let { add("订单号：$it") }
@@ -137,6 +151,11 @@ object ClipboardOrderParser {
             .substringBefore("尾号")
             .substringBefore("手机")
             .substringBefore("电话")
+            .substringBefore("楼层")
+            .substringBefore("房号")
+            .substringBefore("订单")
+            .substringBefore("分机")
+            .substringBefore("备注")
             .substringBefore("  ")
             .trim()
             .trimStart('：', ':', '#', '-', ' ')

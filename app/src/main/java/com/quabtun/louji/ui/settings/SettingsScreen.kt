@@ -295,6 +295,25 @@ fun SettingsScreen(
                 SectionHeader("效率工具")
                 Spacer(Modifier.height(10.dp))
                 SettingsCard {
+                    ListItem(
+                        headlineContent = { Text("识图 / 粘贴后自动保存") },
+                        supportingContent = {
+                            Text("首页秒存与系统分享直接入库；关闭后先填入表单确认")
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = settings.autoSaveOrders,
+                                onCheckedChange = viewModel::setAutoSaveOrders,
+                                modifier = Modifier.testTag("auto_save_switch"),
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
                         title = "媒体占用",
                         subtitle = storage?.let {

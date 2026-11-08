@@ -26,6 +26,7 @@ data class AppSettings(
     val onboardingSeen: Boolean = false,
     val backupReminderEnabled: Boolean = true,
     val lastBackupAt: Long = 0L,
+    val autoSaveOrders: Boolean = true,
 )
 
 class SettingsStore(private val context: Context) {
@@ -45,6 +46,7 @@ class SettingsStore(private val context: Context) {
                 onboardingSeen = preferences[ONBOARDING_SEEN] ?: false,
                 backupReminderEnabled = preferences[BACKUP_REMINDER_ENABLED] ?: true,
                 lastBackupAt = preferences[LAST_BACKUP_AT] ?: 0L,
+                autoSaveOrders = preferences[AUTO_SAVE_ORDERS] ?: true,
             )
         }
 
@@ -76,6 +78,10 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[LAST_BACKUP_AT] = timestamp }
     }
 
+    suspend fun setAutoSaveOrders(enabled: Boolean) {
+        context.settingsDataStore.edit { it[AUTO_SAVE_ORDERS] = enabled }
+    }
+
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
@@ -84,5 +90,6 @@ class SettingsStore(private val context: Context) {
         val ONBOARDING_SEEN = booleanPreferencesKey("onboarding_seen")
         val BACKUP_REMINDER_ENABLED = booleanPreferencesKey("backup_reminder_enabled")
         val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
+        val AUTO_SAVE_ORDERS = booleanPreferencesKey("auto_save_orders")
     }
 }

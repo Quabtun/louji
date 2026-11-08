@@ -72,6 +72,20 @@ class ClipboardOrderParserTest {
     }
 
     @Test
+    fun parsesSingleLineLabeledOrder() {
+        val parsed = ClipboardOrderParser.parse(
+            "收货地址：江景苑 2 栋 楼层：21层 房号：2103 订单号：D5566 王女士 尾号 2145",
+        )
+
+        assertEquals("江景苑 2 栋", parsed.location)
+        assertEquals("21", parsed.floor)
+        assertEquals("2103", parsed.roomNo)
+        assertEquals("D5566", parsed.orderNo)
+        assertEquals("2145", parsed.phoneTail)
+        assertEquals(Gender.FEMALE, parsed.gender)
+    }
+
+    @Test
     fun parsesOcrStyleNoisyText() {
         // OCR 常把冒号后空格吞掉、并引入多余空行/空格。
         val parsed = ClipboardOrderParser.parse(

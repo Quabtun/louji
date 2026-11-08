@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material3.AlertDialog
@@ -87,6 +88,7 @@ import com.quabtun.louji.model.DeliveryMethod
 import com.quabtun.louji.model.ElevatorType
 import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.PersonalityTags
+import com.quabtun.louji.model.RecordDraft
 import com.quabtun.louji.model.TriState
 import com.quabtun.louji.model.categoryLabel
 import com.quabtun.louji.model.deliveryLabel
@@ -396,6 +398,11 @@ fun RecordEditScreen(
                     }
                 }
 
+                if (ui.recognizedFields.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    RecognitionSummary(fields = ui.recognizedFields, draft = ui.draft)
+                }
+
                 if (buildingMatch != null && ui.draft.location.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
                     val profile = buildingMatch!!
@@ -488,6 +495,7 @@ fun RecordEditScreen(
 
                 Spacer(Modifier.height(16.dp))
                 // ---- Card 2: place + access ----
+                val highlightMissing = ui.recognizedFields.isNotEmpty()
                 FormCard(title = "位置、楼层与门禁") {
                     OutlinedTextField(
                         value = ui.draft.location,
@@ -495,7 +503,8 @@ fun RecordEditScreen(
                         modifier = Modifier.fillMaxWidth().testTag("field_location"),
                         label = { Text("位置 *") },
                         placeholder = { Text("小区 / 楼栋，如 阳光花园 3 栋") },
-                        isError = ui.errors.location != null,
+                        isError = ui.errors.location != null ||
+                            (highlightMissing && ui.draft.location.isBlank()),
                         supportingText = ui.errors.location?.let { { Text(it) } },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
@@ -556,6 +565,7 @@ fun RecordEditScreen(
                             onValueChange = viewModel::setFloor,
                             modifier = Modifier.weight(1f).testTag("field_floor"),
                             label = { Text("楼层") },
+                            isError = highlightMissing && ui.draft.floor.isBlank(),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
@@ -564,6 +574,7 @@ fun RecordEditScreen(
                             onValueChange = viewModel::setRoomNo,
                             modifier = Modifier.weight(1.4f).testTag("field_room"),
                             label = { Text("房号") },
+                            isError = highlightMissing && ui.draft.roomNo.isBlank(),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
@@ -1106,4 +1117,68 @@ private fun climbNotePlaceholder(noStairs: TriState): String = when (noStairs) {
     TriState.YES -> "如：电梯直达 / 客户下楼拿"
     TriState.NO -> "如：老小区无电梯 / 电梯坏了"
     TriState.UNKNOWN -> "先去楼下看看，回来再补"
+}
+
+/** "已提取：位置 · 房号 · 尾号" plus a red reminder for required fields the parse missed. */
+@Composable
+private fun RecognitionSummary(fields: List<String>, draft: RecordDraft) {
+    val status = LocalLouJiStatusColors.current
+    val missing = buildList {
+        if (draft.location.isBlank()) add("位置")
+        if (draft.floor.isBlank()) add("楼层")
+        if (draft.roomNo.isBlank()) add("房号")
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("recognition_summary"),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (missing.isEmpty()) {
+                MaterialTheme.colorScheme.outlineVariant
+            } else {
+                status.danger.copy(alpha = 0.5f)
+            },
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = status.noStair,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "识别结果",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "已提取 ${fields.size} 项",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                fields.forEach { label ->
+                    SemanticPill(text = label, tone = PillTone.INFO)
+                }
+            }
+            if (missing.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "待补：${missing.joinToString("、")}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = status.danger,
+                )
+            }
+        }
+    }
 }

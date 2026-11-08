@@ -118,14 +118,15 @@ components:
 
 **Mark: "楼梯尽头的门"**
 
-深墨圆角方块上，琥珀色三级楼梯向右上升，顶端是一个纸色门洞。楼梯是骑手每天走的路，门洞是订单最终要到达的地方；纸色取自台账和运单，避免把门做成普通建筑图标。没有文字、箭头或钥匙孔，48px 下仍能读出「向上走 + 到达门口」。
+深墨圆角方块上，琥珀色三级楼梯向右加速上升（踢面 60、1:2:3 递进），阶梯尽头是一道 148×240 的白色拱门；门洞即订单最终要到达的地方。门是纯白发光面，不描边、不加钥匙孔，48px 下仍能读出「向上走 + 到达门口」。
 
-- **Legacy / round:** 深墨底 + 琥珀楼梯 + Paper (#F4F1EA) 门洞。
-- **Adaptive foreground:** 标记缩到 108dp 安全区中央（约 64dp 宽），背景使用 `ic_launcher_background` 深墨。
-- **Monochrome:** 单色楼梯 + 门洞镂空，跟随 Android 13 主题图标染色；不能把纸色门洞画成实心，否则会变成一块白色。
+- **Master:** `#141923` 深墨圆角底 + `#FFB800` 阶梯与门楼 + `#FFFFFF` 门洞；全部图形收在 66% 安全圆内（中心半径 ≤ 337.9 / 1024），兼容圆形裁剪。
+- **Legacy / round:** 与母版同源；圆形版用 `r=512` 深墨圆底。
+- **Adaptive foreground:** 108dp 透明画布，按母版 108/1024 等比缩放，实测最大半径 34.3 ≤ 66% 安全圆 35.64；背景使用 `ic_launcher_background` (#141923)。
+- **Monochrome:** 全白剪影 + 门洞镂空（mask 挖空），跟随 Android 13 主题图标染色；不能把门洞画成实心，否则会变成一块白色。
 - **In-app lockup:** 首页 app bar 使用 30dp 深墨圆角徽标 + 22×14dp 标记 + 「楼记」标题；设置页不重复品牌标识。
 - **Files:** `design/icon/louji-master.svg`、`louji-round-1024.svg`、`louji-foreground-108.svg`、`louji-monochrome-108.svg`；`tools/icon/render.mjs` 输出全部密度。
-- **Verification:** 48 / 192 / 512px 与模拟器 launcher 实机截图检查；小尺寸不得出现细线门框或糊成一团。
+- **Verification:** 48 / 192 / 512px、66% 安全圆叠加与 72dp 圆形遮罩预览检查；小尺寸不得出现细线门框或糊成一团。
 
 ## Colors
 

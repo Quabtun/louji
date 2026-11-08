@@ -1,6 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
-  <g transform="translate(5.81,5.81) scale(0.09412)">
-    <path fill="#FFC83D" d="M172,726H852V298H452V454H312V598H172V726Z"/>
-    <path fill="#F4F1EA" d="M572,726V462A80,80 0 0 1 732,462V726Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-labelledby="louji-fg-title">
+  <title id="louji-fg-title">楼记自适应图标前景（透明底，图形收在 66% 安全圆内）</title>
+  <!-- 与 louji-master.svg 同一套 1024 坐标，按 108/1024 缩放 -->
+  <g transform="scale(0.10546875)">
+    <g fill="#FFB800">
+      <rect x="276" y="682" width="140" height="60" rx="10"/>
+      <rect x="396" y="622" width="140" height="120" rx="10"/>
+      <rect x="516" y="562" width="232" height="180" rx="12"/>
+      <rect x="516" y="282" width="232" height="305" rx="16"/>
+    </g>
+    <path fill="#FFFFFF" d="M558,562 V396 A74,74 0 0 1 706,396 V562 Z"/>
   </g>
 </svg>

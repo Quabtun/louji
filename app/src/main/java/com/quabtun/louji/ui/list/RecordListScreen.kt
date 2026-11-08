@@ -10,6 +10,10 @@ import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,6 +53,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -65,6 +70,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -92,9 +98,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -132,6 +140,8 @@ import com.quabtun.louji.ui.components.ModernEmptyState
 import com.quabtun.louji.ui.components.PillTone
 import com.quabtun.louji.ui.components.RiskBanner
 import com.quabtun.louji.ui.components.SemanticPill
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.quabtun.louji.ui.components.StatusStamp
 import com.quabtun.louji.ui.components.TileSegmentedSelector
 import com.quabtun.louji.ui.theme.LocalLouJiStatusColors
@@ -156,6 +166,7 @@ fun RecordListScreen(
     onOpenInsights: () -> Unit,
     onOpenBuilding: (String) -> Unit,
     onDuplicate: (Long) -> Unit,
+    onQuickEdit: (text: String?, imageUri: Uri?, message: String?) -> Unit,
     focusSearch: Boolean = false,
 ) {
     val recordsPaged = viewModel.recordsPaged.collectAsLazyPagingItems()
@@ -172,9 +183,13 @@ fun RecordListScreen(
     val undoState by viewModel.undoState.collectAsStateWithLifecycle()
     val radar by viewModel.radar.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val autoSaveEnabled by viewModel.autoSaveEnabled.collectAsStateWithLifecycle()
+    val quickSaving by viewModel.quickSaving.collectAsStateWithLifecycle()
+    val quickEvent by viewModel.quickEvent.collectAsStateWithLifecycle()
 
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val searchFocus = remember { FocusRequester() }
@@ -201,6 +216,50 @@ fun RecordListScreen(
     LaunchedEffect(focusSearch) {
         if (focusSearch) {
             runCatching { searchFocus.requestFocus() }
+        }
+    }
+
+    val quickImageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            if (autoSaveEnabled) {
+                viewModel.quickSaveImage(uri)
+            } else {
+                onQuickEdit(null, uri, null)
+            }
+        }
+    }
+
+    fun quickPaste() {
+        val text = readClipboard(context)
+        if (text.isBlank()) {
+            scope.launch { snackbarHostState.showSnackbar("剪贴板没有订单文字") }
+            return
+        }
+        if (autoSaveEnabled) {
+            viewModel.quickSaveText(text)
+        } else {
+            onQuickEdit(text, null, null)
+        }
+    }
+
+    LaunchedEffect(quickEvent) {
+        when (val event = quickEvent) {
+            is QuickSaveEvent.Saved -> {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                delay(8_000)
+                if ((viewModel.quickEvent.value as? QuickSaveEvent.Saved)?.recordId ==
+                    event.recordId
+                ) {
+                    viewModel.consumeQuickEvent()
+                }
+            }
+            is QuickSaveEvent.Fallback -> {
+                viewModel.consumeQuickEvent()
+                onQuickEdit(event.text, event.imageUri, event.message)
+            }
+            null -> Unit
         }
     }
 
@@ -330,6 +389,33 @@ fun RecordListScreen(
                                 )
                             }
                             item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    QuickActionTile(
+                                        title = "截屏秒存",
+                                        caption = if (autoSaveEnabled) "OCR · 自动入库" else "OCR · 填入表单",
+                                        icon = R.drawable.ic_gallery,
+                                        modifier = Modifier.weight(1f).testTag("quick_ocr"),
+                                        onClick = {
+                                            quickImageLauncher.launch(
+                                                PickVisualMediaRequest(
+                                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                                ),
+                                            )
+                                        },
+                                    )
+                                    QuickActionTile(
+                                        title = "粘贴秒存",
+                                        caption = if (autoSaveEnabled) "文本 · 自动入库" else "文本 · 填入表单",
+                                        icon = R.drawable.ic_export,
+                                        modifier = Modifier.weight(1f).testTag("quick_paste"),
+                                        onClick = { quickPaste() },
+                                    )
+                                }
+                            }
+                            item {
                                 ChipRow(
                                     filter = filter,
                                     dateRange = dateRange,
@@ -449,6 +535,45 @@ fun RecordListScreen(
             OrderScreenshotOverlay(path = path, onDismiss = { zoomedImage = null })
         }
 
+        val savedEvent = quickEvent as? QuickSaveEvent.Saved
+        if (savedEvent != null) {
+            Snackbar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 96.dp)
+                    .testTag("quick_save_bar"),
+                actionOnNewLine = true,
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                action = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.inversePrimary,
+                            ),
+                            onClick = {
+                                viewModel.consumeQuickEvent()
+                                onOpenDetail(savedEvent.recordId)
+                            },
+                        ) { Text("查看详情") }
+                        TextButton(
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.inversePrimary,
+                            ),
+                            onClick = {
+                                viewModel.undoQuickSave(savedEvent.recordId)
+                                viewModel.consumeQuickEvent()
+                                scope.launch { snackbarHostState.showSnackbar("已撤销自动保存") }
+                            },
+                        ) { Text("撤销") }
+                    }
+                },
+            ) {
+                Text("✅ 已自动保存：${savedEvent.label}")
+            }
+        }
+
         if (showFilterSheet) {
             FilterSheet(
                 showArchived = showArchived,
@@ -467,6 +592,85 @@ fun RecordListScreen(
                     viewModel.clearDateRange()
                 },
             )
+        }
+
+        if (quickSaving) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.18f))
+                    .testTag("quick_saving"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 6.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("正在识别并保存…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionTile(
+    title: String,
+    caption: String,
+    icon: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

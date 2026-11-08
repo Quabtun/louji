@@ -199,12 +199,63 @@ class RecordFlowTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("江景苑 2 栋").fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithText("识别结果").assertExists()
+        compose.onNodeWithText("已提取 6 项").assertExists()
         compose.onNodeWithTag("field_location").assertTextContains("江景苑 2 栋")
         compose.onNodeWithTag("field_order").assertTextContains("D5566")
         compose.onNodeWithTag("field_tail").assertTextContains("2145")
         compose.onNodeWithTag("field_floor").assertTextContains("21")
         compose.onNodeWithTag("field_room").assertTextContains("2103")
         compose.onNodeWithTag("gender_1").assertIsSelected()
+    }
+
+    @Test
+    fun recognitionSummaryFlagsMissingFloorAndRoom() {
+        val app = ApplicationProvider.getApplicationContext<LouJiApp>()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val clipboard = app.getSystemService(ClipboardManager::class.java)
+            clipboard.setPrimaryClip(
+                ClipData.newPlainText("order", "收货地址：江景苑 2 栋 尾号 2145"),
+            )
+        }
+
+        compose.onNodeWithTag("create_record").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("paste_order").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("paste_order").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("识别结果").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("待补：楼层、房号").assertExists()
+    }
+
+    @Test
+    fun quickPasteSavesRecordAndUndoRemovesIt() {
+        val app = ApplicationProvider.getApplicationContext<LouJiApp>()
+        runBlocking { app.container.settings.setAutoSaveOrders(true) }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val clipboard = app.getSystemService(ClipboardManager::class.java)
+            clipboard.setPrimaryClip(
+                ClipData.newPlainText(
+                    "order",
+                    "收货地址：江景苑 2 栋\n楼层：21层\n房号：2103\n尾号 2145",
+                ),
+            )
+        }
+
+        compose.onNodeWithTag("quick_paste").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("已自动保存", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("已自动保存：江景苑 2 栋 · 21-2103", substring = true)
+            .assertExists()
+
+        compose.onNodeWithText("撤销").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("还没有记录").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test

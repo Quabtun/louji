@@ -1,5 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#121517"/>
-  <path fill="#FFC83D" d="M172,726H852V298H452V454H312V598H172V726Z"/>
-  <path fill="#F4F1EA" d="M572,726V462A80,80 0 0 1 732,462V726Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="louji-title">
+  <title id="louji-title">楼记：琥珀阶梯尽头的通透门洞</title>
+  <!-- 深墨石板圆角底 -->
+  <rect width="1024" height="1024" rx="224" fill="#141923"/>
+  <g fill="#FFB800">
+    <!-- 三级踏步：踢面各 60，台体高度 60 / 120 / 180（1:2:3）；向右叠压 20 消除接缝 -->
+    <rect x="276" y="682" width="140" height="60" rx="10"/>
+    <rect x="396" y="622" width="140" height="120" rx="10"/>
+    <rect x="516" y="562" width="232" height="180" rx="12"/>
+    <!-- 门楼：立在台面（562）之上，框厚 42，门楣 40 -->
+    <rect x="516" y="282" width="232" height="305" rx="16"/>
+  </g>
+  <!-- 通透门洞：148 × 240 黄金矩形（1:1.62），拱顶朝上 -->
+  <path fill="#FFFFFF" d="M558,562 V396 A74,74 0 0 1 706,396 V562 Z"/>
+  <!-- 全部图形最大半径 329.5 < 337.9（66% 安全圆） -->
 </svg>
