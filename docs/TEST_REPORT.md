@@ -9,15 +9,15 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 48 / 48 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 41 / 41 通过 | `app/build/reports/androidTests/connected/debug/` |
-| 仪器化测试（API 26/25/24） | DAO + 迁移 + 备份加密 各 24 / 24 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
+| JVM 单元测试 | 58 / 58 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 43 / 43 通过 | `app/build/reports/androidTests/connected/debug/` |
+| 仪器化测试（API 26/24） | DAO + 迁移（含 5→6）+ 备份加密 各 25 / 25 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
 | 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | 已签名（v1.20.0，versionCode 31，约 45.4MB 含中文模型） | `apksigner verify` 通过 |
+| Release APK | 已签名（v2.0.0，versionCode 32，约 45.5MB 含中文模型） | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（24）
@@ -47,7 +47,7 @@
 
 > Windows 中文项目路径下，Gradle 的 JVM 测试 worker 可能无法加载测试类。通过 ASCII 目录联接运行（`D:\louji-build` → 项目目录）后 48 / 48 通过；APK、Lint、仪器化测试不受影响。详见 README「Windows 中文路径说明」。
 
-## 3. 仪器化测试（41，API 35 模拟器）
+## 3. 仪器化测试（43，API 35 模拟器）
 
 命令：
 
@@ -263,6 +263,7 @@
 - `docs/screenshots/onboarding.png`
 - `docs/screenshots/batch-selection.png`
 - `docs/ACCESSIBILITY.md`
+- `docs/screenshots/v2-home.png` / `v2-buildings.png` / `v2-insights.png` / `v2-me.png`
 - `app/build/reports/tests/testDebugUnitTest/index.html`
 - `app/build/reports/androidTests/connected/debug/index.html`
 - `app/build/reports/lint-results-debug.html`
@@ -278,3 +279,14 @@
 - GitHub Actions 发布工作流需要用户配置签名 Secrets；v1.0.0 / v1.0.1 / v1.0.2 / v1.0.3 / v1.0.4 / v1.0.5 / v1.0.6 / v1.0.7 / v1.0.8 / v1.1.0 使用本地签名发布。
 - 当前 GitHub 账号 Actions 因计费被锁定，CI 工作流已在仓库中禁用；本地测试、Lint、Mimosa 与发布已全部完成。
 - 签名密钥丢失后无法覆盖安装新版本；README 已标注备份要求。
+
+## 9. v2.0.0 重构验证补充
+
+- 设计系统 2.0 全量落地：冷灰/纯白双主题、四套语义色、五类共享组件。
+- Room v5→v6：新增楼栋表、记录 5 个扩展列、附件分类；`DatabaseMigrationTest.migrate5To6AddsColumnsAndSeedsBuildingProfiles` 验证建表、加列与历史回填。
+- 备份 schema=2：`BackupJsonTest` 覆盖新字段往返、`schema=1` 旧 JSON 反序列化与楼栋档案往返；`BackupManagerTest` 继续覆盖加密/路径穿越/超大 JSON。
+- 解析器 2.0：`ClipboardOrderParserTest` 新增虚拟号分机、复合地址拆分（3 例）、交付偏好与备注提示映射。
+- 楼层聚合：`FloorMathTest` 覆盖 6/6F/12楼/18层、B1/负层/地下层、层数与高度/卡路里换算。
+- 楼栋链路：`BuildingFlowTest` 验证保存记录→自动生成楼栋档案→楼栋库列表→详情历史房号与门禁徽章。
+- 交互升级导致的测试适配：详情页替换现场页作为卡片默认落点；视图切换移入筛选抽屉；分段选择器改用 `*_index` testTag；底部导航用 `tab_*` testTag。
+- 修复：详情页在 `Column` 内容中提前 `return@Column` 会触发 Compose SlotTable 崩溃（`index=-5`），改为 if/else 分支后恢复；设置页重复记录弹窗漏收集 StateFlow 导致不刷新，已改为 `collectAsStateWithLifecycle`。

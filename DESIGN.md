@@ -2,19 +2,30 @@
 name: 楼记 LouJi
 description: 给骑手用的私人爬楼台账
 colors:
-  ink: "#121517"
-  paper: "#F4F1EA"
-  paper-raised: "#FBF9F4"
-  safety-amber: "#FFC83D"
-  amber-deep: "#6A4B00"
-  signal-green: "#1F6B45"
-  signal-green-night: "#6FE3A1"
-  concrete: "#5A656B"
-  alert-red: "#B3261E"
-  night-bg: "#101214"
-  night-surface: "#15181A"
-  rule-light: "#CBC6B9"
-  rule-dark: "#3F4143"
+  ink: "#0F172A"
+  paper: "#F4F6F9"
+  paper-raised: "#FFFFFF"
+  surface-variant: "#EDF1F7"
+  action-amber: "#FFB800"
+  amber-text-light: "#D97706"
+  amber-text-dark: "#FFC83D"
+  on-amber: "#111827"
+  pass-green: "#059669"
+  pass-green-container: "#ECFDF5"
+  climb-orange: "#EA580C"
+  climb-orange-container: "#FFF7ED"
+  danger-red: "#DC2626"
+  danger-red-container: "#FEF2F2"
+  info-blue: "#2563EB"
+  info-blue-container: "#EFF6FF"
+  secondary-text: "#64748B"
+  rule: "#E2E8F0"
+  night-bg: "#0B0E14"
+  night-surface: "#141923"
+  night-surface-variant: "#1D2432"
+  night-text: "#F1F5F9"
+  night-secondary: "#94A3B8"
+  night-rule: "#242C3D"
 typography:
   display:
     fontFamily: "Roboto, Noto Sans CJK SC, sans-serif"
@@ -88,7 +99,9 @@ components:
 
 ## Overview
 
-**Creative North Star: "楼道台账"**
+**Creative North Star: "现代战术效率工具"（Modern Tactical Field Ledger）**
+
+> 2.0 起整体视觉改为清爽冷灰底 + 纯白卡片 + 单一安全琥珀行动色；旧版「混凝土纸色」已废弃，下方文字仅保留版式与规则部分的历史说明，颜色与组件以本页顶部 tokens 与「2.0 组件」章节为准。
 
 楼记不是一张通用笔记卡片，而是一本骑手随身携带的楼道台账：一枚印章先告诉你「免爬 / 要爬」，一个巨大的楼层房号告诉你爬到哪，剩下的字段像运单一样一行行排好。Material 3 提供结构与交互，视觉取自骑手每天真正接触的东西——运单、楼层牌、手写记录和门口的安全标记。
 
@@ -214,8 +227,17 @@ components:
 
 ### Navigation
 - 单 Activity + Navigation Compose；顶部 app bar 显示上下文，返回使用系统返回 / 预测性返回。
-- 没有底部导航栏：首页和设置是仅有的两个一级目的地，避免为两项做底栏。
+- **2.0 底部四栏**：台账 / 楼栋库 / 洞察 / 我的；仅在四个一级页显示，进入编辑、详情、楼栋详情、涂鸦标注、媒体查看、相机时隐藏。
 - 列表 → 详情用 slide + fade；表单 → 详情用 fade；尊重系统动画缩放。
+
+### 2.0 Components
+- **SemanticPill**：图标 + 短文本微胶囊，用于门禁密码（蓝）、电梯类型、会下楼（绿）、交付偏好、雷区（红）。
+- **CopyableCodeBadge**：门禁密码胶囊，点按复制 + 触觉反馈。
+- **TileSegmentedSelector**：48dp+ 大尺寸分段选择器，替代戴手套难点的 FilterChip。
+- **ModernEmptyState**：双层圆环图标底座 + 主次文案 + 协调按钮，不再用薄荷绿。
+- **RiskBanner / InfoBanner**：珊瑚红风险卡 / 蓝色楼栋匹配提示。
+- **爬楼里程碑卡**：层数大数字 + 折算高度/卡路里 + 趣味成就文案。
+- **三张 Canvas 图表**：决策环形图、14 天堆叠柱状图、12 周热力日历。
 
 ### Signature Components
 - **品牌标识组合 (Brand lockup):** 首页 app bar 的 30dp 墨色圆角徽标 + 22×14dp 楼梯门洞标记 + 「楼记」标题；图标与实际 launcher 图标同源，不另画一套。
