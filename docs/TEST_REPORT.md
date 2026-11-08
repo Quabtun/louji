@@ -17,7 +17,7 @@
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | v2.0.1 已签名（versionCode 33，约 45.5MB 含中文模型）；2.1.0 通过 `assembleDebug` | `apksigner verify` 通过 |
+| Release APK | v2.1.0 已签名（versionCode 34，47.7MB 含中文模型），已发布 GitHub Release | `apksigner verify` 通过；2.0.1 → 2.1.0 覆盖安装成功 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（59）
@@ -307,3 +307,4 @@
 - `RecordFlowTest.pasteOrderFromClipboardFillsFields` 增断言：识别结果胶囊「已提取 6 项」。
 - 模拟器手工走查：分享文字后直达详情（`v2.1-share-auto-save.png`）；关闭自动保存后分享只预填表单；无文字图片回退手动建单并挂订单截图（`v2.1-ocr-fallback.png`）；首页秒存按钮与空剪贴板提示（`v2.1-quick-entry.png`）。
 - 全量结果：JVM 59 / 59，API 35 仪器化 51 / 51，`:app:assembleDebug` 通过。
+- 发布：GitHub Release `v2.1.0`（tag 指向 4ece78f，APK 47,749,474 字节，sha256 `4dace48d…`，签名 `48d7799e…`）；模拟器从 2.0.1 覆盖安装并启动成功。
