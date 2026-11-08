@@ -5,6 +5,9 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import com.quabtun.louji.BuildConfig
 import com.quabtun.louji.data.db.RecordEntity
+import com.quabtun.louji.model.AttachmentCategory
+import com.quabtun.louji.model.DeliveryMethod
+import com.quabtun.louji.model.ElevatorType
 import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.MediaDraft
 import com.quabtun.louji.model.MediaType
@@ -59,17 +62,19 @@ class BackupManager(
             PreparedRecord(item.record, files)
         }
         val mediaCount = prepared.sumOf { it.files.size }
+        val buildings = repository.allBuildings()
         val manifest = BackupManifest(
             exportedAt = clock(),
             appVersion = BuildConfig.VERSION_NAME,
             recordCount = prepared.size,
             mediaCount = mediaCount,
+            buildingCount = buildings.size,
         )
 
         if (password.isNullOrBlank()) {
-            exportPlain(uri, prepared, manifest, mediaCount, onProgress)
+            exportPlain(uri, prepared, buildings, manifest, mediaCount, onProgress)
         } else {
-            exportEncrypted(uri, prepared, manifest, mediaCount, password, onProgress)
+            exportEncrypted(uri, prepared, buildings, manifest, mediaCount, password, onProgress)
         }
         manifest
     }
@@ -77,6 +82,7 @@ class BackupManager(
     private fun exportPlain(
         uri: Uri,
         prepared: List<PreparedRecord>,
+        buildings: List<com.quabtun.louji.data.db.BuildingProfileEntity>,
         manifest: BackupManifest,
         mediaCount: Int,
         onProgress: (Int, Int) -> Unit,
@@ -88,6 +94,10 @@ class BackupManager(
                 zip.putJsonEntry(
                     "records.json",
                     json.encodeToString(prepared.map { it.toBackupRecord() }),
+                )
+                zip.putJsonEntry(
+                    "buildings.json",
+                    json.encodeToString(buildings.map { it.toBackupBuilding() }),
                 )
                 var done = 0
                 for (record in prepared) {
@@ -109,6 +119,7 @@ class BackupManager(
     private fun exportEncrypted(
         uri: Uri,
         prepared: List<PreparedRecord>,
+        buildings: List<com.quabtun.louji.data.db.BuildingProfileEntity>,
         manifest: BackupManifest,
         mediaCount: Int,
         password: String,
@@ -127,6 +138,12 @@ class BackupManager(
                         json.encodeToString(prepared.map { it.toBackupRecord() }).toByteArray(),
                     ),
                     encryptedParams("records.json"),
+                )
+                zip.addStream(
+                    ByteArrayInputStream(
+                        json.encodeToString(buildings.map { it.toBackupBuilding() }).toByteArray(),
+                    ),
+                    encryptedParams("buildings.json"),
                 )
                 var done = 0
                 for (record in prepared) {
@@ -158,6 +175,19 @@ class BackupManager(
         isEncryptFiles = true
         encryptionMethod = EncryptionMethod.AES
         aesKeyStrength = AesKeyStrength.KEY_STRENGTH_256
+    }
+
+    /** Writes the ledger as CSV (UTF-8 + BOM). Returns the exported record count. */
+    suspend fun exportCsv(uri: Uri, desensitised: Boolean): Int = withContext(Dispatchers.IO) {
+        val records = repository.allRecords()
+        val csv = CsvExporter.build(records, desensitised)
+        val output = openOutput(uri) ?: throw BackupException("无法写入所选位置")
+        try {
+            output.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
+        } catch (error: IOException) {
+            throw BackupException("导出 CSV 失败，请检查存储空间后重试", error)
+        }
+        records.size
     }
 
     suspend fun importBackup(
@@ -265,10 +295,15 @@ class BackupManager(
                             target.delete()
                             return@mapNotNull null
                         }
-                            val draft = when (type) {
+                            val base = when (type) {
                                 MediaType.VIDEO -> mediaStore.completeVideo(target)
                                 MediaType.IMAGE -> mediaStore.completeImage(target, mime)
                             }
+                            val draft = base.copy(
+                                category = runCatching {
+                                    AttachmentCategory.valueOf(attachment.category)
+                                }.getOrDefault(AttachmentCategory.OTHER),
+                            )
                         copiedMedia += draft
                         draft to item.createdAt
                     },
@@ -361,7 +396,7 @@ class BackupManager(
                     val name = header.fileName.replace('\\', '/')
                     if (header.isDirectory) continue
                     val allowed = name == "manifest.json" || name == "records.json" ||
-                        name.startsWith("media/")
+                        name == "buildings.json" || name.startsWith("media/")
                     if (!allowed || name.startsWith("/") ||
                         name.split('/').any { it == ".." } || name.contains('\u0000')
                     ) {
@@ -430,7 +465,7 @@ class BackupManager(
                         continue
                     }
                     val allowed = name == "manifest.json" || name == "records.json" ||
-                        name.startsWith("media/")
+                        name == "buildings.json" || name.startsWith("media/")
                     if (!allowed || name.startsWith("/") || name.split('/').any { it == ".." } ||
                         name.contains('\u0000')
                     ) {
@@ -532,6 +567,11 @@ class BackupManager(
         archived = record.archived,
         createdAt = record.createdAt,
         updatedAt = record.updatedAt,
+        phoneExt = record.phoneExt,
+        accessCode = record.accessCode,
+        elevatorType = record.elevatorType.name,
+        deliveryMethod = record.deliveryMethod.name,
+        isWarning = record.isWarning,
         attachments = files.map { file ->
             BackupAttachment(
                 type = file.attachment.type.name,
@@ -539,9 +579,26 @@ class BackupManager(
                 mimeType = file.attachment.mimeType,
                 sizeBytes = file.attachment.sizeBytes,
                 durationMs = file.attachment.durationMs,
+                category = file.attachment.category.name,
             )
         },
     )
+
+    private fun com.quabtun.louji.data.db.BuildingProfileEntity.toBackupBuilding() =
+        BackupBuilding(
+            location = location,
+            elevatorType = elevatorType.name,
+            accessCode = accessCode,
+            doorIntact = doorIntact.name,
+            canOpenFromAbove = canOpenFromAbove.name,
+            lockerInfo = lockerInfo,
+            accessTags = accessTags,
+            notes = notes,
+            coverPhotoPath = coverPhotoPath,
+            pinned = pinned,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+        )
 
     private fun PreparedImport.toEntity(now: Long): RecordEntity = RecordEntity(
         location = backup.location,
@@ -565,6 +622,13 @@ class BackupManager(
         archived = backup.archived,
         createdAt = createdAt,
         updatedAt = backup.updatedAt.takeIf { it > 0 } ?: now,
+        phoneExt = backup.phoneExt.take(8),
+        accessCode = backup.accessCode.take(24),
+        elevatorType = runCatching { ElevatorType.valueOf(backup.elevatorType) }
+            .getOrDefault(ElevatorType.UNKNOWN),
+        deliveryMethod = runCatching { DeliveryMethod.valueOf(backup.deliveryMethod) }
+            .getOrDefault(DeliveryMethod.UNKNOWN),
+        isWarning = backup.isWarning,
     )
 
     private fun extensionOf(file: File): String {
@@ -592,6 +656,26 @@ class BackupManager(
         val files: List<PreparedFile>,
     )
 
+    private fun BackupBuilding.toEntity(): com.quabtun.louji.data.db.BuildingProfileEntity =
+        com.quabtun.louji.data.db.BuildingProfileEntity(
+            location = location.trim().take(120),
+            elevatorType = runCatching { ElevatorType.valueOf(elevatorType) }
+                .getOrDefault(ElevatorType.UNKNOWN),
+            accessCode = accessCode.take(24),
+            doorIntact = runCatching { com.quabtun.louji.model.TriState.valueOf(doorIntact) }
+                .getOrDefault(com.quabtun.louji.model.TriState.UNKNOWN),
+            canOpenFromAbove = runCatching {
+                com.quabtun.louji.model.TriState.valueOf(canOpenFromAbove)
+            }.getOrDefault(com.quabtun.louji.model.TriState.UNKNOWN),
+            lockerInfo = lockerInfo.take(200),
+            accessTags = accessTags.take(8).map { it.take(20) },
+            notes = notes.take(500),
+            coverPhotoPath = coverPhotoPath?.takeIf { it.startsWith("/") },
+            pinned = pinned,
+            createdAt = createdAt.takeIf { it > 0 } ?: clock(),
+            updatedAt = updatedAt.takeIf { it > 0 } ?: clock(),
+        )
+
     private data class PreparedImport(
         val backup: BackupRecord,
         val createdAt: Long,
@@ -600,13 +684,14 @@ class BackupManager(
     )
 
     private companion object {
-        const val SUPPORTED_SCHEMA = 1
+        const val SUPPORTED_SCHEMA = 2
         const val MAX_RECORDS = 10_000
         const val MAX_ATTACHMENTS = 20
         const val MAX_ENTRIES = 20_000
         const val MAX_JSON_BYTES = 16L * 1024 * 1024
         const val MAX_SINGLE_FILE_BYTES = 500L * 1024 * 1024
         const val MAX_TOTAL_BYTES = 8L * 1024 * 1024 * 1024
+        const val MAX_BUILDINGS = 5_000
         const val STALE_CACHE_MS = 60L * 60 * 1000
     }
 }

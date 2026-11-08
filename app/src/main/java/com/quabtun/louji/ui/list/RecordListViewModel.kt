@@ -8,7 +8,10 @@ import androidx.paging.PagingData
 import com.quabtun.louji.data.DeleteUndoController
 import com.quabtun.louji.data.PendingDelete
 import com.quabtun.louji.data.RecordRepository
+import com.quabtun.louji.data.db.BuildingProfileEntity
 import com.quabtun.louji.data.db.RecordWithAttachments
+import com.quabtun.louji.model.BuildingStats
+import com.quabtun.louji.model.CustomerProfile
 import com.quabtun.louji.model.DateRange
 import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordSort
@@ -25,6 +28,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -117,6 +122,34 @@ class RecordListViewModel(
 
     val undoState: StateFlow<PendingDelete?> = deleteUndo.pending
 
+    /**
+     * Live "second-look radar": while the rider types, surface the matched building profile and/or
+     * a returning customer's history before they even reach the door.
+     */
+    val radar: StateFlow<RadarHit?> = _query
+        .debounce(260)
+        .mapLatest { value -> buildRadar(value) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private suspend fun buildRadar(rawQuery: String): RadarHit? {
+        val value = rawQuery.trim()
+        if (value.length < 2) return null
+        val building = repository.findBuildingMatch(value)
+        val stats = building?.let { repository.buildingStats(it.location) } ?: BuildingStats()
+        val customer = if (value.matches(Regex("""\d{4}"""))) {
+            repository.customerProfile(value, "", "")
+        } else {
+            CustomerProfile()
+        }
+        if (building == null && !customer.hasHistory) return null
+        return RadarHit(
+            building = building,
+            buildingStats = stats,
+            customer = customer.takeIf { it.hasHistory },
+            tailLabel = value.takeIf { customer.hasHistory }.orEmpty(),
+        )
+    }
+
     fun setQuery(value: String) {
         _query.value = value
     }
@@ -162,9 +195,7 @@ class RecordListViewModel(
     }
 
     fun toggleSelection(id: Long) {
-        _selectedIds.value = _selectedIds.value.let {
-            if (id in it) it - id else it + id
-        }
+        _selectedIds.value = _selectedIds.value.let { if (id in it) it - id else it + id }
     }
 
     fun selectAll(records: List<RecordWithAttachments>) {
@@ -182,6 +213,13 @@ class RecordListViewModel(
         viewModelScope.launch {
             repository.setArchivedBatch(ids, archived)
             exitSelectionMode()
+        }
+    }
+
+    fun trashOne(id: Long) {
+        viewModelScope.launch {
+            repository.softDelete(id)
+            deleteUndo.announce(id)
         }
     }
 
@@ -207,5 +245,12 @@ class RecordListViewModel(
         val filter: RecordFilter,
         val showArchived: Boolean,
         val dateRange: DateRange,
+    )
+
+    data class RadarHit(
+        val building: BuildingProfileEntity? = null,
+        val buildingStats: BuildingStats = BuildingStats(),
+        val customer: CustomerProfile? = null,
+        val tailLabel: String = "",
     )
 }

@@ -1,5 +1,12 @@
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
+
 package com.quabtun.louji.ui.detail
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +31,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -47,10 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.AnnotatedString
@@ -58,12 +65,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.quabtun.louji.R
 import com.quabtun.louji.data.db.RecordWithAttachments
+import com.quabtun.louji.model.AttachmentCategory
+import com.quabtun.louji.model.DeliveryMethod
+import com.quabtun.louji.model.ElevatorType
 import com.quabtun.louji.model.TriState
+import com.quabtun.louji.model.categoryLabel
+import com.quabtun.louji.model.deliveryLabel
+import com.quabtun.louji.model.elevatorLabel
 import com.quabtun.louji.ui.components.ConfirmDialog
+import com.quabtun.louji.ui.components.CopyableCodeBadge
 import com.quabtun.louji.ui.components.LedgerRow
 import com.quabtun.louji.ui.components.MediaTile
+import com.quabtun.louji.ui.components.PillTone
+import com.quabtun.louji.ui.components.RiskBanner
 import com.quabtun.louji.ui.components.SectionHeader
+import com.quabtun.louji.ui.components.SemanticPill
 import com.quabtun.louji.ui.components.StatusStamp
 import com.quabtun.louji.ui.theme.LocalLouJiStatusColors
 import com.quabtun.louji.ui.theme.TabularNumbers
@@ -76,7 +94,7 @@ import com.quabtun.louji.util.shareText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RecordDetailScreen(
     viewModel: RecordDetailViewModel,
@@ -86,9 +104,11 @@ fun RecordDetailScreen(
     onDuplicate: (Long) -> Unit,
     onArchive: (Boolean) -> Unit,
     onOpenMedia: (Long, Int) -> Unit,
+    onOpenBuilding: (String) -> Unit,
+    onOpenAnnotate: (Long) -> Unit,
 ) {
     val record by viewModel.record.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbar = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var menuExpanded by remember { mutableStateOf(false) }
@@ -110,17 +130,14 @@ fun RecordDetailScreen(
                 title = {
                     Text(
                         text = record?.record?.location ?: "记录",
-                        style = MaterialTheme.typography.titleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleLarge,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("detail_back")) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回",
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
@@ -151,10 +168,7 @@ fun RecordDetailScreen(
                                     )
                                     DropdownMenuItem(
                                         text = {
-                                            Text(
-                                                "彻底删除",
-                                                color = MaterialTheme.colorScheme.error,
-                                            )
+                                            Text("彻底删除", color = MaterialTheme.colorScheme.error)
                                         },
                                         leadingIcon = {
                                             Icon(
@@ -194,7 +208,19 @@ fun RecordDetailScreen(
                                             menuExpanded = false
                                             clipboard.setText(AnnotatedString(item.shareText()))
                                             scope.launch {
-                                                snackbarHostState.showSnackbar("摘要已复制")
+                                                snackbar.showSnackbar("摘要已复制")
+                                            }
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("复制脱敏摘要") },
+                                        onClick = {
+                                            menuExpanded = false
+                                            clipboard.setText(
+                                                AnnotatedString(item.desensitisedShareText()),
+                                            )
+                                            scope.launch {
+                                                snackbar.showSnackbar("脱敏摘要已复制")
                                             }
                                         },
                                     )
@@ -227,46 +253,34 @@ fun RecordDetailScreen(
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         when {
-            record == null && !waited -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
+            record == null && !waited -> Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
 
-            record == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("记录不存在", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "这条记录可能已经被删除。",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onBack) { Text("返回") }
-                    }
+            record == null -> Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("记录不存在", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "这条记录可能已经被删除。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = onBack) { Text("返回") }
                 }
             }
 
             else -> {
                 val item = record!!
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
+                    modifier = Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     Column(
@@ -277,38 +291,49 @@ fun RecordDetailScreen(
                             .padding(horizontal = 20.dp)
                             .padding(top = 4.dp, bottom = 32.dp),
                     ) {
-                        DetailHeader(item = item)
-                        Spacer(Modifier.height(22.dp))
-                        SectionHeader("订单")
-                        Spacer(Modifier.height(4.dp))
-                        LedgerRow(
-                            label = "位置",
-                            value = item.record.location.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "订单号",
-                            value = item.record.orderNo.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "性别",
-                            value = item.record.gender.label(),
-                        )
-                        LedgerRow(
-                            label = "手机尾号",
-                            value = item.record.phoneTail.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "楼层",
-                            value = item.record.floor.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "房号",
-                            value = item.record.roomNo.ifBlank { "未填写" },
-                        )
+                        HeroCard(item = item)
+                        if (item.record.isWarning || item.record.doorIntact == TriState.NO) {
+                            Spacer(Modifier.height(12.dp))
+                            RiskBanner(
+                                title = if (item.record.isWarning) "避坑 / 雷区记录" else "门有问题",
+                                body = buildString {
+                                    if (item.record.doorIntact == TriState.NO) append("门已损坏。")
+                                    if (item.record.isWarning) append("这单曾被标记为雷区，注意沟通。")
+                                },
+                            )
+                        }
 
-                        Spacer(Modifier.height(20.dp))
-                        SectionHeader("门与进入")
+                        Spacer(Modifier.height(22.dp))
+                        SectionHeader("通行与门禁")
                         Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Spacer(Modifier.weight(1f))
+                            TextButton(
+                                onClick = { onOpenBuilding(item.record.location) },
+                                modifier = Modifier.testTag("open_building"),
+                            ) { Text("所属楼栋攻略 ›", style = MaterialTheme.typography.labelMedium) }
+                        }
+                        LedgerRow(label = "位置", value = item.record.location.ifBlank { "未填写" })
+                        LedgerRow(
+                            label = "楼层 / 房号",
+                            value = if (item.record.floor.isBlank() && item.record.roomNo.isBlank()) {
+                                "未填写"
+                            } else {
+                                placeDisplay(item.record.floor, item.record.roomNo)
+                            },
+                        )
+                        LedgerRow(
+                            label = "电梯类型",
+                            value = item.record.elevatorType.takeIf { it != ElevatorType.UNKNOWN }
+                                ?.elevatorLabel() ?: "未填写",
+                        )
+                        LedgerRow(
+                            label = "门禁密码",
+                            value = item.record.accessCode.ifBlank { "未填写" },
+                        )
                         LedgerRow(
                             label = "门是否完好",
                             value = item.record.doorIntact.doorLabel(),
@@ -329,26 +354,18 @@ fun RecordDetailScreen(
                         )
                         LedgerRow(
                             label = "不用爬楼",
-                            value = item.record.noStairs.let {
-                                when (it) {
-                                    TriState.YES -> "是"
-                                    TriState.NO -> "否"
-                                    TriState.UNKNOWN -> "待确认"
-                                }
+                            value = when (item.record.noStairs) {
+                                TriState.YES -> "是"
+                                TriState.NO -> "否"
+                                TriState.UNKNOWN -> "待确认"
                             },
                         )
                         LedgerRow(
-                            label = "爬楼说明",
-                            value = item.record.climbNote.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
                             label = "会下来拿",
-                            value = item.record.willComeDown.let {
-                                when (it) {
-                                    TriState.YES -> "会"
-                                    TriState.NO -> "不会"
-                                    TriState.UNKNOWN -> "未知"
-                                }
+                            value = when (item.record.willComeDown) {
+                                TriState.YES -> "会"
+                                TriState.NO -> "不会"
+                                TriState.UNKNOWN -> "未知"
                             },
                             valueColor = if (item.record.willComeDown == TriState.YES) {
                                 LocalLouJiStatusColors.current.noStair
@@ -356,56 +373,62 @@ fun RecordDetailScreen(
                                 MaterialTheme.colorScheme.onSurface
                             },
                         )
+                        LedgerRow(
+                            label = "爬楼说明",
+                            value = item.record.climbNote.ifBlank { "未填写" },
+                        )
+
+                        Spacer(Modifier.height(20.dp))
+                        SectionHeader("订单")
+                        Spacer(Modifier.height(4.dp))
+                        LedgerRow(
+                            label = "订单号",
+                            value = item.record.orderNo.ifBlank { "未填写" },
+                        )
+                        LedgerRow(label = "性别", value = item.record.gender.label())
+                        LedgerRow(
+                            label = "手机尾号",
+                            value = item.record.phoneTail.ifBlank { "未填写" },
+                        )
+                        LedgerRow(
+                            label = "分机号",
+                            value = item.record.phoneExt.ifBlank { "未填写" },
+                        )
 
                         Spacer(Modifier.height(20.dp))
                         SectionHeader("客户")
-                        Spacer(Modifier.height(14.dp))
-                        if (item.record.personalityTags.isEmpty() &&
-                            item.record.personalityNote.isBlank()
+                        Spacer(Modifier.height(10.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Text(
-                                text = "还没有记录客户性格",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            SemanticPill(
+                                text = if (item.record.willComeDown == TriState.YES) "会下楼" else "不会下楼",
+                                tone = if (item.record.willComeDown == TriState.YES) {
+                                    PillTone.PASS
+                                } else {
+                                    PillTone.NEUTRAL
+                                },
+                                iconRes = R.drawable.ic_elevator,
                             )
-                        } else {
-                            if (item.record.personalityTags.isNotEmpty()) {
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    item.record.personalityTags.forEach { tag ->
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            shape = RoundedCornerShape(8.dp),
-                                        ) {
-                                            Text(
-                                                text = tag,
-                                                modifier = Modifier.padding(
-                                                    horizontal = 10.dp,
-                                                    vertical = 5.dp,
-                                                ),
-                                                style = MaterialTheme.typography.labelMedium,
-                                            )
-                                        }
-                                    }
-                                }
-                                if (item.record.personalityNote.isNotBlank()) {
-                                    Spacer(Modifier.height(8.dp))
-                                }
-                            }
-                            if (item.record.personalityNote.isNotBlank()) {
-                                Text(
-                                    text = item.record.personalityNote,
-                                    style = MaterialTheme.typography.bodyLarge,
+                            if (item.record.deliveryMethod != DeliveryMethod.UNKNOWN) {
+                                SemanticPill(
+                                    text = item.record.deliveryMethod.deliveryLabel(),
+                                    tone = PillTone.NEUTRAL,
                                 )
                             }
+                            item.record.personalityTags.forEach { tag ->
+                                SemanticPill(text = tag, tone = PillTone.NEUTRAL)
+                            }
+                        }
+                        if (item.record.personalityNote.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(item.record.personalityNote, style = MaterialTheme.typography.bodyLarge)
                         }
 
                         Spacer(Modifier.height(20.dp))
                         SectionHeader("备注")
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(10.dp))
                         Text(
                             text = item.record.remark.ifBlank { "还没有备注" },
                             style = MaterialTheme.typography.bodyLarge,
@@ -417,8 +440,8 @@ fun RecordDetailScreen(
                         )
 
                         Spacer(Modifier.height(20.dp))
-                        SectionHeader("现场")
-                        Spacer(Modifier.height(14.dp))
+                        SectionHeader("现场（${item.attachments.size}）")
+                        Spacer(Modifier.height(10.dp))
                         if (item.attachments.isEmpty()) {
                             Text(
                                 text = "还没有现场附件",
@@ -432,14 +455,39 @@ fun RecordDetailScreen(
                                 maxItemsInEachRow = 3,
                             ) {
                                 item.attachments.forEachIndexed { index, attachment ->
-                                    MediaTile(
-                                        type = attachment.type,
-                                        filePath = attachment.filePath,
-                                        thumbPath = attachment.thumbPath,
-                                        durationMs = attachment.durationMs,
-                                        modifier = Modifier.testTag("media_tile_$index"),
-                                        onClick = { onOpenMedia(item.record.id, index) },
-                                    )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        MediaTile(
+                                            type = attachment.type,
+                                            filePath = attachment.filePath,
+                                            thumbPath = attachment.thumbPath,
+                                            durationMs = attachment.durationMs,
+                                            modifier = Modifier.testTag("media_tile_$index"),
+                                            onClick = { onOpenMedia(item.record.id, index) },
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = attachment.category.categoryLabel(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            if (attachment.type ==
+                                                com.quabtun.louji.model.MediaType.IMAGE
+                                            ) {
+                                                TextButton(
+                                                    onClick = { onOpenAnnotate(attachment.id) },
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                                        4.dp,
+                                                    ),
+                                                ) {
+                                                    Text(
+                                                        "标注",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -450,31 +498,24 @@ fun RecordDetailScreen(
                                 onClick = { viewModel.restore(onRestored = onBack) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Text("恢复记录")
-                            }
+                            ) { Text("恢复记录") }
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 OutlinedButton(
                                     onClick = { onEdit(item.record.id) },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(12.dp),
-                                ) {
-                                    Text("编辑记录")
-                                }
+                                ) { Text("编辑记录") }
                                 OutlinedButton(
                                     onClick = { onDuplicate(item.record.id) },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(12.dp),
-                                ) {
-                                    Text("再来一单")
-                                }
+                                ) { Text("再来一单") }
                             }
                         }
+
                         Spacer(Modifier.height(20.dp))
-                        HorizontalDivider(
-                            color = LocalLouJiStatusColors.current.rule,
-                        )
+                        HorizontalDivider(color = LocalLouJiStatusColors.current.rule)
                         Spacer(Modifier.height(12.dp))
                         Text(
                             text = "创建于 ${formatFullDateTime(item.record.createdAt)}",
@@ -507,7 +548,6 @@ fun RecordDetailScreen(
             onDismiss = { showDeleteDialog = false },
         )
     }
-
     if (showPurgeDialog) {
         ConfirmDialog(
             title = "彻底删除这条记录？",
@@ -524,60 +564,93 @@ fun RecordDetailScreen(
 }
 
 @Composable
-private fun DetailHeader(item: RecordWithAttachments) {
+private fun HeroCard(item: RecordWithAttachments) {
     val record = item.record
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Top) {
+    val status = LocalLouJiStatusColors.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (record.isWarning) status.danger.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusStamp(noStairs = record.noStairs, compact = false)
+                Spacer(Modifier.weight(1f))
+                if (record.accessCode.isNotBlank()) {
+                    CopyableCodeBadge(code = record.accessCode)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             Text(
                 text = record.location,
-                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.size(12.dp))
-            StatusStamp(noStairs = record.noStairs, compact = false)
-        }
-        Spacer(Modifier.height(16.dp))
-        val hasPlace = record.floor.isNotBlank() || record.roomNo.isNotBlank()
-        Text(
-            text = if (hasPlace) "楼层 / 房号" else "楼层 / 房号未填",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = if (hasPlace) placeDisplay(record.floor, record.roomNo) else "—",
-            style = if (hasPlace) {
-                MaterialTheme.typography.displayLarge.copy(
-                    fontFeatureSettings = TabularNumbers.fontFeatureSettings,
-                )
-            } else {
-                MaterialTheme.typography.displaySmall
-            },
-            fontWeight = FontWeight.Black,
-            color = if (hasPlace) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        val meta = buildList {
-            if (record.gender != com.quabtun.louji.model.Gender.UNKNOWN) {
-                add(record.gender.label())
-            }
-            if (record.phoneTail.isNotBlank()) add("尾号 ${record.phoneTail}")
-            if (record.orderNo.isNotBlank()) add("订单 ${record.orderNo}")
-        }
-        if (meta.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
+            val hasPlace = record.floor.isNotBlank() || record.roomNo.isNotBlank()
             Text(
-                text = meta.joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFeatureSettings = TabularNumbers.fontFeatureSettings,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = if (hasPlace) placeDisplay(record.floor, record.roomNo) else "楼层 / 房号未填",
+                style = if (hasPlace) {
+                    MaterialTheme.typography.displayLarge.copy(
+                        fontFeatureSettings = TabularNumbers.fontFeatureSettings,
+                    )
+                } else {
+                    MaterialTheme.typography.titleMedium
+                },
+                fontWeight = FontWeight.Black,
+                color = if (hasPlace) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(10.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (record.elevatorType != ElevatorType.UNKNOWN) {
+                    SemanticPill(
+                        text = record.elevatorType.elevatorLabel(),
+                        tone = if (record.elevatorType == ElevatorType.STAIRS_ONLY) {
+                            PillTone.CLIMB
+                        } else {
+                            PillTone.NEUTRAL
+                        },
+                        iconRes = R.drawable.ic_elevator,
+                    )
+                }
+                if (record.deliveryMethod != DeliveryMethod.UNKNOWN) {
+                    SemanticPill(
+                        text = record.deliveryMethod.deliveryLabel(),
+                        tone = PillTone.NEUTRAL,
+                    )
+                }
+                if (record.willComeDown == TriState.YES) {
+                    SemanticPill(text = "会下楼", tone = PillTone.PASS)
+                }
+                if (record.isWarning) {
+                    SemanticPill(text = "雷区", tone = PillTone.DANGER, iconRes = R.drawable.ic_warning)
+                }
+            }
         }
     }
+}
+
+private fun RecordWithAttachments.desensitisedShareText(): String {
+    val record = this.record
+    return buildString {
+        appendLine("【楼记】${record.location}")
+        if (record.floor.isNotBlank()) appendLine("楼层：${record.floor}")
+        if (record.accessCode.isNotBlank()) appendLine("门禁：${record.accessCode}")
+        appendLine("爬楼：${if (record.noStairs == TriState.YES) "免爬" else "要爬"}")
+        if (record.climbNote.isNotBlank()) appendLine("说明：${record.climbNote}")
+        appendLine("（已隐去订单号、手机尾号与房号）")
+    }.trim()
 }

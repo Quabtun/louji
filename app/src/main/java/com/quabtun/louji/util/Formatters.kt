@@ -107,3 +107,32 @@ fun recordSearchSubtitle(item: RecordWithAttachments): String {
     }
     return if (parts.isEmpty()) "未填订单信息" else parts.joinToString(" · ")
 }
+
+/**
+ * Rider-friendly timestamp: 刚刚 / 今天 HH:mm / 昨天 HH:mm / MM-dd HH:mm / yyyy-MM-dd.
+ */
+fun formatFriendlyTime(timestamp: Long, now: Long = System.currentTimeMillis()): String {
+    if (timestamp <= 0) return "—"
+    val diff = now - timestamp
+    if (diff in 0..60_000) return "刚刚"
+    val zone = java.util.TimeZone.getDefault()
+    fun startOfDay(value: Long): Long = java.util.Calendar.getInstance(zone).apply {
+        timeInMillis = value
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val today = startOfDay(now)
+    val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+    val dateFmt = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+    val fullFmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+    return when {
+        timestamp >= today -> "今天 ${timeFmt.format(java.util.Date(timestamp))}"
+        timestamp >= today - 24L * 60 * 60 * 1000 ->
+            "昨天 ${timeFmt.format(java.util.Date(timestamp))}"
+        now - timestamp < 365L * 24 * 60 * 60 * 1000 ->
+            dateFmt.format(java.util.Date(timestamp))
+        else -> fullFmt.format(java.util.Date(timestamp))
+    }
+}

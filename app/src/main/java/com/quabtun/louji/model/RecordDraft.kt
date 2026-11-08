@@ -15,6 +15,11 @@ data class RecordDraft(
     val personalityNote: String = "",
     val remark: String = "",
     val climbNote: String = "",
+    val phoneExt: String = "",
+    val accessCode: String = "",
+    val elevatorType: ElevatorType = ElevatorType.UNKNOWN,
+    val deliveryMethod: DeliveryMethod = DeliveryMethod.UNKNOWN,
+    val isWarning: Boolean = false,
 ) {
     fun hasMeaningfulContent(): Boolean =
         location.isNotBlank() ||
@@ -25,9 +30,14 @@ data class RecordDraft(
             personalityNote.isNotBlank() ||
             remark.isNotBlank() ||
             climbNote.isNotBlank() ||
+            accessCode.isNotBlank() ||
+            phoneExt.isNotBlank() ||
             personalityTags.isNotEmpty() ||
             noStairs != TriState.UNKNOWN ||
             doorIntact != TriState.UNKNOWN ||
             canOpenFromAbove != TriState.UNKNOWN ||
-            willComeDown != TriState.UNKNOWN
+            willComeDown != TriState.UNKNOWN ||
+            elevatorType != ElevatorType.UNKNOWN ||
+            deliveryMethod != DeliveryMethod.UNKNOWN ||
+            isWarning
 }

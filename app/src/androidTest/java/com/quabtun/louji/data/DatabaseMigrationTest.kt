@@ -120,6 +120,55 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate5To6AddsColumnsAndSeedsBuildingProfiles() {
+        helper.createDatabase(TEST_DB, 5).apply {
+            execSQL(
+                """
+                INSERT INTO records (
+                    location, orderNo, gender, phoneTail, floor, roomNo,
+                    doorIntact, canOpenFromAbove, noStairs, willComeDown,
+                    personalityTags, personalityNote, remark, climbNote, archived, deletedAt,
+                    createdAt, updatedAt
+                ) VALUES (
+                    '江景苑', 'A1', 'FEMALE', '4821', '21', '2103',
+                    'YES', 'NO', 'NO', 'YES',
+                    '[]', '', '门禁在左手边', '客户要送上门', 0, 0, 1, 2
+                )
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val database = helper.runMigrationsAndValidate(
+            TEST_DB,
+            6,
+            true,
+            LouJiDatabase.MIGRATION_5_6,
+        )
+        database.query(
+            "SELECT phoneExt, accessCode, elevatorType, deliveryMethod, isWarning " +
+                "FROM records",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("", cursor.getString(0))
+            assertEquals("", cursor.getString(1))
+            assertEquals("UNKNOWN", cursor.getString(2))
+            assertEquals("UNKNOWN", cursor.getString(3))
+            assertEquals(0, cursor.getInt(4))
+        }
+        database.query(
+            "SELECT location, doorIntact, canOpenFromAbove, accessCode " +
+                "FROM building_profiles",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("江景苑", cursor.getString(0))
+            assertEquals("YES", cursor.getString(1))
+            assertEquals("NO", cursor.getString(2))
+            assertEquals("", cursor.getString(3))
+        }
+    }
+
     private companion object {
         const val TEST_DB = "louji-migration-test.db"
     }

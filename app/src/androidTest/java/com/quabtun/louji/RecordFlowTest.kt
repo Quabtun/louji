@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -57,7 +58,7 @@ class RecordFlowTest {
         createRecord()
 
         compose.onAllNodesWithText("阳光花园 3 栋").assertCountEquals(3)
-        compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
+        compose.onAllNodesWithText("7F · 2-301").assertCountEquals(2)
         compose.onNodeWithText("门是否完好").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("上面能开门").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("会下来拿").performScrollTo().assertIsDisplayed()
@@ -101,7 +102,7 @@ class RecordFlowTest {
         }
         compose.onNodeWithTag("filter_ALL").performClick()
         compose.onAllNodesWithText("有媒体").assertCountEquals(0)
-        compose.onNodeWithText("备注：门禁在左手边").assertExists()
+        compose.onAllNodesWithText("客户会下楼拿，电梯直达").assertCountEquals(1)
         compose.onNodeWithText("详细信息").performClick()
         waitForDetail()
 
@@ -122,13 +123,9 @@ class RecordFlowTest {
             compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("阳光花园 3 栋").performClick()
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithTag("record_media").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("还没有现场图片或视频").assertIsDisplayed()
-        compose.onNodeWithTag("media_details").performClick()
         waitForDetail()
-        compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
+        compose.onAllNodesWithText("7F · 2-301").assertCountEquals(2)
+        compose.onNodeWithText("现场（0）").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -207,7 +204,7 @@ class RecordFlowTest {
         compose.onNodeWithTag("field_tail").assertTextContains("2145")
         compose.onNodeWithTag("field_floor").assertTextContains("21")
         compose.onNodeWithTag("field_room").assertTextContains("2103")
-        compose.onNodeWithTag("gender_FEMALE").assertIsSelected()
+        compose.onNodeWithTag("gender_1").assertIsSelected()
     }
 
     @Test
@@ -226,7 +223,7 @@ class RecordFlowTest {
         compose.onNodeWithTag("save_record").performClick()
         waitForDetail()
         compose.onAllNodesWithText("新地址 9 栋").assertCountEquals(3)
-        compose.onNodeWithText("7F · 2-301").assertIsDisplayed()
+        compose.onAllNodesWithText("7F · 2-301").assertCountEquals(2)
     }
 
     @Test
@@ -276,7 +273,9 @@ class RecordFlowTest {
         compose.waitUntil(8_000) {
             compose.onAllNodesWithText("还没有记录").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("view_archived").performClick()
+        compose.onNodeWithTag("filter_sheet").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("已归档", useUnmergedTree = true).performClick()
         compose.waitUntil(8_000) {
             compose.onAllNodesWithText("阳光花园 3 栋").fetchSemanticsNodes().isNotEmpty()
         }
@@ -308,12 +307,12 @@ class RecordFlowTest {
             )
         }
 
-        compose.onNodeWithTag("settings_button").performClick()
+        compose.onNodeWithTag("tab_me").performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("合并重复记录").performClick()
-        compose.waitUntil(5_000) {
+        compose.onNodeWithTag("settings_merge").performScrollTo().performClick()
+        compose.waitUntil(8_000) {
             compose.onAllNodesWithText("发现 1 组重复", substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -325,20 +324,20 @@ class RecordFlowTest {
 
     private fun createRecord() {
         compose.onNodeWithTag("create_record").performClick()
-        compose.onNodeWithTag("decision_no_stairs").performClick()
+        compose.onNodeWithTag("decision_tile_0").performClick()
         compose.onNodeWithTag("field_climb_note").performTextInput("客户会下楼拿，电梯直达")
         Espresso.closeSoftKeyboard()
         compose.onNodeWithTag("field_location").performScrollTo().performTextInput("阳光花园 3 栋")
         compose.onNodeWithTag("field_order").performScrollTo().performTextInput("A12345")
         compose.onNodeWithTag("field_tail").performScrollTo().performTextInput("4821")
-        compose.onNodeWithTag("gender_FEMALE").performScrollTo().performClick()
+        compose.onNodeWithTag("gender_1").performScrollTo().performClick()
         Espresso.closeSoftKeyboard()
         compose.onNodeWithTag("field_floor").performScrollTo().performTextInput("7")
         compose.onNodeWithTag("field_room").performScrollTo().performTextInput("2-301")
         Espresso.closeSoftKeyboard()
-        compose.onNodeWithTag("door_yes").performScrollTo().performClick()
-        compose.onNodeWithTag("open_above_no").performScrollTo().performClick()
-        compose.onNodeWithTag("come_down_yes").performScrollTo().performClick()
+        compose.onNodeWithTag("door_0").performScrollTo().performClick()
+        compose.onNodeWithTag("open_above_1").performScrollTo().performClick()
+        compose.onNodeWithTag("come_down_0").performScrollTo().performClick()
         compose.onNodeWithTag("tag_好沟通").performScrollTo().performClick()
         compose.onNodeWithTag("field_note").performScrollTo()
             .performTextInput("Nice, calls before arriving")

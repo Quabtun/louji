@@ -37,6 +37,8 @@ object RecordMerger {
             result = result.copy(
                 orderNo = result.orderNo.ifBlank { other.orderNo },
                 phoneTail = result.phoneTail.ifBlank { other.phoneTail },
+                phoneExt = result.phoneExt.ifBlank { other.phoneExt },
+                accessCode = result.accessCode.ifBlank { other.accessCode },
                 floor = result.floor.ifBlank { other.floor },
                 roomNo = result.roomNo.ifBlank { other.roomNo },
                 personalityTags = (result.personalityTags + other.personalityTags).distinct(),
@@ -48,6 +50,9 @@ object RecordMerger {
                 willComeDown = if (result.willComeDown == TriState.UNKNOWN) other.willComeDown else result.willComeDown,
                 doorIntact = if (result.doorIntact == TriState.UNKNOWN) other.doorIntact else result.doorIntact,
                 canOpenFromAbove = if (result.canOpenFromAbove == TriState.UNKNOWN) other.canOpenFromAbove else result.canOpenFromAbove,
+                elevatorType = if (result.elevatorType == ElevatorType.UNKNOWN) other.elevatorType else result.elevatorType,
+                deliveryMethod = if (result.deliveryMethod == DeliveryMethod.UNKNOWN) other.deliveryMethod else result.deliveryMethod,
+                isWarning = result.isWarning || other.isWarning,
             )
         }
         return result

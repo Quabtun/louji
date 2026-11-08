@@ -1,7 +1,10 @@
 package com.quabtun.louji
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -26,6 +29,7 @@ class AccessibilitySemanticsTest {
     fun listControlsHaveAccessibleLabels() {
         val app = ApplicationProvider.getApplicationContext<LouJiApp>()
         runBlocking {
+            app.container.repository.clearAll()
             app.container.repository.save(
                 draft = RecordDraft(
                     location = "阳光花园",
@@ -41,22 +45,22 @@ class AccessibilitySemanticsTest {
         }
 
         compose.onNodeWithContentDescription("记一单").assertExists()
-        compose.onNodeWithContentDescription("设置").assertExists()
+        compose.onNodeWithTag("tab_me").assertExists()
         compose.onNodeWithContentDescription("搜索位置、订单号、尾号、房号").assertExists()
         // Status is spoken as text, not color alone.
         compose.onNodeWithText("要爬").assertExists()
         // Filter chips announce their selected state via Material FilterChip semantics.
         compose.onNodeWithText("要爬楼").assertExists()
-        compose.onNodeWithText("活跃").assertExists()
+        compose.onAllNodesWithTag("filter_sheet").assertCountEquals(1)
     }
 
     @Test
     fun settingsControlsAreLabelled() {
-        compose.onNodeWithContentDescription("设置").performClick()
+        compose.onNodeWithTag("tab_me").performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithContentDescription("返回").assertExists()
+        compose.onNodeWithText("应用锁").assertExists()
         compose.onNodeWithText("导出备份").assertExists()
         compose.onNodeWithText("合并重复记录").assertExists()
     }

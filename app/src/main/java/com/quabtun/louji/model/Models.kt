@@ -17,11 +17,38 @@ enum class MediaType {
     VIDEO,
 }
 
+enum class ElevatorType {
+    DIRECT,
+    STAIRS_ONLY,
+    HALF_FLOOR,
+    ODD_EVEN,
+    CARD_CONTROL,
+    FREIGHT_SLOW,
+    UNKNOWN,
+}
+
+enum class DeliveryMethod {
+    DOORSTEP,
+    COME_DOWN,
+    LOCKER,
+    HAND_TO_HAND,
+    UNKNOWN,
+}
+
+enum class AttachmentCategory {
+    ORDER_SCREENSHOT,
+    BUILDING_ENTRY,
+    DROP_OFF,
+    ROUTE_GUIDE,
+    OTHER,
+}
+
 enum class RecordFilter {
     ALL,
     STAIRS,
     NO_STAIRS,
     WILL_COME_DOWN,
+    WARNING,
 }
 
 object PersonalityTags {
@@ -106,4 +133,5 @@ data class MediaDraft(
     val mimeType: String,
     val sizeBytes: Long,
     val durationMs: Long,
+    val category: AttachmentCategory = AttachmentCategory.OTHER,
 )

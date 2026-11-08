@@ -23,12 +23,15 @@ private const val FILTER_WHERE = """
         OR climbNote LIKE '%' || :query || '%'
         OR personalityNote LIKE '%' || :query || '%'
         OR personalityTags LIKE '%' || :query || '%'
+        OR accessCode LIKE '%' || :query || '%'
+        OR phoneExt LIKE '%' || :query || '%'
     )
     AND (
         :filter = 'ALL'
         OR (:filter = 'STAIRS' AND noStairs = 'NO')
         OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
         OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
+        OR (:filter = 'WARNING' AND isWarning = 1)
     )
     AND archived = :archived
     AND deletedAt = 0
@@ -144,6 +147,106 @@ interface RecordDao {
         """,
     )
     fun observeRecentLocations(): Flow<List<String>>
+
+    @Query(
+        """
+        SELECT COUNT(*) AS recordCount,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown,
+            0 AS floorsClimbed
+        FROM records
+        WHERE deletedAt = 0 AND createdAt >= :since AND createdAt < :until
+        """,
+    )
+    fun observeTotalsForRange(since: Long, until: Long): Flow<com.quabtun.louji.model.ClimbTotals>
+
+    @Query(
+        """
+        SELECT floor, createdAt FROM records
+        WHERE deletedAt = 0 AND noStairs = 'NO'
+          AND createdAt >= :since AND createdAt < :until
+        """,
+    )
+    fun observeClimbedFloorsForRange(since: Long, until: Long): Flow<List<FloorRow>>
+
+    @Query(
+        """
+        SELECT ((createdAt + :offsetMs) / :dayMs) * :dayMs - :offsetMs AS dayStart,
+            COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN noStairs = 'NO' THEN 1 ELSE 0 END), 0) AS stairs
+        FROM records
+        WHERE deletedAt = 0 AND createdAt >= :since
+        GROUP BY dayStart
+        ORDER BY dayStart ASC
+        """,
+    )
+    fun observeDayBuckets(
+        since: Long,
+        dayMs: Long,
+        offsetMs: Long,
+    ): Flow<List<com.quabtun.louji.model.DayBucket>>
+
+    @Query(
+        """
+        SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown,
+            COALESCE(SUM(CASE WHEN isWarning = 1 THEN 1 ELSE 0 END), 0) AS warnings
+        FROM records
+        WHERE deletedAt = 0 AND phoneTail = :tail AND phoneTail != ''
+        """,
+    )
+    suspend fun customerAggregateByTail(tail: String): CustomerAgg
+
+    @Query(
+        """
+        SELECT * FROM records
+        WHERE deletedAt = 0 AND phoneTail = :tail AND phoneTail != ''
+        ORDER BY createdAt DESC LIMIT 1
+        """,
+    )
+    suspend fun lastRecordByTail(tail: String): RecordEntity?
+
+    @Query(
+        """
+        SELECT COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown,
+            COALESCE(SUM(CASE WHEN isWarning = 1 THEN 1 ELSE 0 END), 0) AS warnings
+        FROM records
+        WHERE deletedAt = 0 AND location = :location AND roomNo = :roomNo AND roomNo != ''
+        """,
+    )
+    suspend fun customerAggregateByPlace(location: String, roomNo: String): CustomerAgg
+
+    @Query(
+        """
+        SELECT * FROM records
+        WHERE deletedAt = 0 AND location = :location AND roomNo = :roomNo AND roomNo != ''
+        ORDER BY createdAt DESC LIMIT 1
+        """,
+    )
+    suspend fun lastRecordByPlace(location: String, roomNo: String): RecordEntity?
+
+    @Query(
+        """
+        SELECT * FROM records
+        WHERE deletedAt = 0 AND location = :location
+        ORDER BY createdAt DESC
+        """,
+    )
+    suspend fun recordsAtLocation(location: String): List<RecordEntity>
+
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM records
+        WHERE deletedAt = 0 AND archived = 0 AND location = :location
+        ORDER BY createdAt DESC
+        """,
+    )
+    fun observeAtLocation(location: String): Flow<List<RecordWithAttachments>>
 
     @Query(
         """

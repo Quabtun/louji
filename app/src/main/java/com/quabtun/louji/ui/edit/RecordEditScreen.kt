@@ -1,22 +1,26 @@
 package com.quabtun.louji.ui.edit
 
 import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
-import androidx.activity.compose.BackHandler
+import android.content.Intent
+import android.net.Uri
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,34 +35,32 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,72 +69,86 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quabtun.louji.R
 import com.quabtun.louji.data.LocalMediaStore
-import com.quabtun.louji.data.OrderTextRecognizer
+import com.quabtun.louji.data.ShareIntake
+import com.quabtun.louji.model.AttachmentCategory
+import com.quabtun.louji.model.ClimbReasons
+import com.quabtun.louji.model.DeliveryMethod
+import com.quabtun.louji.model.ElevatorType
 import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.PersonalityTags
 import com.quabtun.louji.model.TriState
+import com.quabtun.louji.model.categoryLabel
+import com.quabtun.louji.model.deliveryLabel
+import com.quabtun.louji.model.elevatorLabel
 import com.quabtun.louji.ui.camera.CameraCaptureScreen
-import com.quabtun.louji.ui.components.ClimbDecisionSelector
 import com.quabtun.louji.ui.components.ConfirmDialog
-import com.quabtun.louji.ui.components.LouJiFilterChip
+import com.quabtun.louji.ui.components.CopyableCodeBadge
+import com.quabtun.louji.ui.components.InfoBanner
 import com.quabtun.louji.ui.components.MediaTile
+import com.quabtun.louji.ui.components.PillTone
+import com.quabtun.louji.ui.components.RiskBanner
 import com.quabtun.louji.ui.components.SectionHeader
-import com.quabtun.louji.ui.components.TriStateSelector
+import com.quabtun.louji.ui.components.SemanticPill
+import com.quabtun.louji.ui.components.TileSegmentedSelector
+import com.quabtun.louji.ui.theme.LocalLouJiStatusColors
 import com.quabtun.louji.util.ClipboardOrderParser
 import com.quabtun.louji.util.LocationHelper
 import com.quabtun.louji.util.ParsedOrder
-import com.quabtun.louji.util.label
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun RecordEditScreen(
     viewModel: RecordEditViewModel,
     mediaStore: LocalMediaStore,
     recordId: Long?,
     duplicateId: Long?,
+    initialLocation: String?,
+    shareIntake: ShareIntake,
+    autoPaste: Boolean,
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val recentLocations by viewModel.recentLocations.collectAsStateWithLifecycle()
+    val buildingMatch by viewModel.buildingMatch.collectAsStateWithLifecycle()
+    val customerMatch by viewModel.customerMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val focusManager = LocalFocusManager.current
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showMediaSheet by remember { mutableStateOf(false) }
     var showCamera by remember { mutableStateOf(false) }
     var cameraVideo by remember { mutableStateOf(false) }
-    var locationRequestId by remember { mutableStateOf(0) }
+    var locationRequestId by remember { mutableIntStateOf(0) }
     var isLocating by remember { mutableStateOf(false) }
     var pendingPaste by remember { mutableStateOf<ParsedOrder?>(null) }
     var pendingFillLabel by remember { mutableStateOf("剪贴板") }
-    var isRecognizing by remember { mutableStateOf(false) }
-    val ocrRecognizer = remember { OrderTextRecognizer(context) }
+    var showCategorySheetFor by remember { mutableStateOf<Long?>(null) }
+    var showPendingCategoryFor by remember { mutableStateOf<Int?>(null) }
+    var voiceFailed by remember { mutableStateOf(false) }
     val formScrollState = rememberScrollState()
+    var autoPasted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(recordId, duplicateId) {
-        viewModel.initialize(recordId, duplicateId)
+    LaunchedEffect(recordId, duplicateId, initialLocation) {
+        viewModel.initialize(recordId, duplicateId, initialLocation)
     }
     LaunchedEffect(ui.message) {
         val message = ui.message
         if (message != null) {
-            snackbarHostState.showSnackbar(message)
+            snackbar.showSnackbar(message)
             viewModel.clearMessage()
         }
     }
@@ -143,15 +159,13 @@ fun RecordEditScreen(
             when (val result = LocationHelper.currentPlace(context)) {
                 is LocationHelper.Result.Success -> viewModel.setLocation(result.place)
                 LocationHelper.Result.PermissionMissing ->
-                    snackbarHostState.showSnackbar("没有定位权限，手动填写位置即可")
+                    snackbar.showSnackbar("没有定位权限，手动填写位置即可")
                 LocationHelper.Result.LocationDisabled ->
-                    snackbarHostState.showSnackbar("系统定位已关闭，请打开定位或手动填写位置")
+                    snackbar.showSnackbar("系统定位已关闭，请打开定位或手动填写位置")
                 LocationHelper.Result.Timeout ->
-                    snackbarHostState.showSnackbar("当前没有定位信号，手动填写位置即可")
+                    snackbar.showSnackbar("当前没有定位信号，手动填写位置即可")
                 is LocationHelper.Result.Failed ->
-                    snackbarHostState.showSnackbar(
-                        result.message ?: "定位失败，手动填写位置即可",
-                    )
+                    snackbar.showSnackbar(result.message ?: "定位失败，手动填写位置即可")
             }
         } finally {
             isLocating = false
@@ -166,35 +180,36 @@ fun RecordEditScreen(
         if (granted) {
             locationRequestId++
         } else {
-            scope.launch { snackbarHostState.showSnackbar("没有定位权限，手动填写位置即可") }
+            scope.launch { snackbar.showSnackbar("没有定位权限，手动填写位置即可") }
         }
     }
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(20),
-    ) { uris ->
-        viewModel.importUris(uris)
+    ) { uris -> viewModel.importUris(uris) }
+    val ocrLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let { viewModel.recognizeImage(it, attach = true) } }
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val text = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                viewModel.applyVoiceText(text)
+            }
+        }
     }
 
     val attemptBack: () -> Unit = {
         if (ui.saving) {
-            scope.launch { snackbarHostState.showSnackbar("正在保存，请稍候") }
+            scope.launch { snackbar.showSnackbar("正在保存，请稍候") }
         } else if (viewModel.hasUnsavedChanges()) {
             showDiscardDialog = true
         } else {
             onBack()
         }
-    }
-    val hasChanges = viewModel.hasUnsavedChanges()
-
-    fun applyParsedOrder(parsed: ParsedOrder, sourceLabel: String = "剪贴板") {
-        parsed.location?.let(viewModel::setLocation)
-        parsed.orderNo?.let(viewModel::setOrderNo)
-        parsed.phoneTail?.let(viewModel::setPhoneTail)
-        parsed.floor?.let(viewModel::setFloor)
-        parsed.roomNo?.let(viewModel::setRoomNo)
-        parsed.gender?.let(viewModel::setGender)
-        val labels = parsed.labels().joinToString("、")
-        scope.launch { snackbarHostState.showSnackbar("已从${sourceLabel}填入：$labels") }
     }
 
     fun pasteOrder() {
@@ -208,64 +223,33 @@ fun RecordEditScreen(
             }
         }.getOrDefault("")
         if (text.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar("剪贴板没有文字或无法读取") }
+            scope.launch { snackbar.showSnackbar("剪贴板没有文字或无法读取") }
             return
         }
         val parsed = ClipboardOrderParser.parse(text)
         if (parsed.isEmpty) {
-            scope.launch { snackbarHostState.showSnackbar("没识别到订单信息，可手动填写") }
+            scope.launch { snackbar.showSnackbar("没识别到订单信息，可手动填写") }
             return
         }
         val hasExisting = ui.draft.location.isNotBlank() ||
             ui.draft.orderNo.isNotBlank() ||
             ui.draft.phoneTail.isNotBlank() ||
             ui.draft.floor.isNotBlank() ||
-            ui.draft.roomNo.isNotBlank() ||
-            ui.draft.gender != Gender.UNKNOWN
+            ui.draft.roomNo.isNotBlank()
         if (hasExisting) {
             pendingFillLabel = "剪贴板"
             pendingPaste = parsed
         } else {
-            applyParsedOrder(parsed)
+            viewModel.applyParsed(parsed, overwrite = true)
+            scope.launch { snackbar.showSnackbar("已从剪贴板填入：${parsed.labels().joinToString("、")}") }
         }
     }
 
-    fun recognizeOrderImage(uri: android.net.Uri) {
-        scope.launch {
-            isRecognizing = true
-            try {
-                val text = ocrRecognizer.recognize(uri)
-                if (text.isBlank()) {
-                    snackbarHostState.showSnackbar("没识别到文字，可手动填写")
-                    return@launch
-                }
-                val parsed = ClipboardOrderParser.parse(text)
-                if (parsed.isEmpty) {
-                    snackbarHostState.showSnackbar("截图里没识别到订单信息，可手动填写")
-                    return@launch
-                }
-                val hasExisting = ui.draft.location.isNotBlank() ||
-                    ui.draft.orderNo.isNotBlank() ||
-                    ui.draft.phoneTail.isNotBlank() ||
-                    ui.draft.floor.isNotBlank() ||
-                    ui.draft.roomNo.isNotBlank() ||
-                    ui.draft.gender != Gender.UNKNOWN
-                if (hasExisting) {
-                    pendingFillLabel = "订单截图"
-                    pendingPaste = parsed
-                } else {
-                    applyParsedOrder(parsed, "订单截图")
-                }
-            } finally {
-                isRecognizing = false
-            }
+    LaunchedEffect(autoPaste) {
+        if (autoPaste && !autoPasted && ui.initialized) {
+            autoPasted = true
+            pasteOrder()
         }
-    }
-
-    val ocrImageLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        uri?.let { recognizeOrderImage(it) }
     }
 
     if (showCamera) {
@@ -281,10 +265,10 @@ fun RecordEditScreen(
         return
     }
 
-    BackHandler(enabled = hasChanges || ui.saving) { attemptBack() }
-
     Scaffold(
-        modifier = Modifier.semantics { testTagsAsResourceId = true },
+        modifier = Modifier
+            .testTag("record_edit")
+            .semantics { testTagsAsResourceId = true },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -295,101 +279,204 @@ fun RecordEditScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = attemptBack, modifier = Modifier.testTag("close_edit")) {
+                    IconButton(
+                        onClick = attemptBack,
+                        modifier = Modifier.testTag("close_edit"),
+                    ) {
                         Icon(Icons.Filled.Close, contentDescription = "关闭")
                     }
                 },
+                actions = {},
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.background) {
-                Column {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                    )
-                    Box(
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(modifier = Modifier.navigationBarsPadding().imePadding()) {
+                    Button(
+                        onClick = { viewModel.save(onSaved) },
+                        enabled = !ui.saving,
                         modifier = Modifier
-                            .navigationBarsPadding()
-                            .imePadding()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                            .height(52.dp)
+                            .testTag("save_record"),
+                        shape = RoundedCornerShape(12.dp),
                     ) {
-                        Button(
-                            onClick = { viewModel.save(onSaved) },
-                            enabled = ui.initialized && !ui.saving && !ui.importing,
-                            modifier = Modifier
-                                .widthIn(max = 760.dp)
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .align(Alignment.Center)
-                                .testTag("save_record"),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                        ) {
-                            if (ui.saving) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text("保存中…")
-                            } else {
-                                Text(
-                                    text = if (ui.isEditing) "保存修改" else "保存记录",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
+                        if (ui.saving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text("保存记录", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
         },
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
     ) { padding ->
-        if (!ui.initialized) {
-            Box(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Column(
                 modifier = Modifier
+                    .widthIn(max = 760.dp)
                     .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
+                    .verticalScroll(formScrollState)
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 4.dp, bottom = 24.dp)
+                    .testTag("form_scroll"),
             ) {
-                CircularProgressIndicator()
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 760.dp)
-                        .fillMaxSize()
-                        .verticalScroll(formScrollState)
-                        .testTag("form_scroll")
-                        .imePadding()
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 4.dp, bottom = 24.dp),
+                // ---- 3-tool workbench ----
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    ClimbDecisionSelector(
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "10 秒填单",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolTile(
+                                label = "粘贴运单",
+                                caption = "剪贴板",
+                                icon = R.drawable.ic_export,
+                                modifier = Modifier.weight(1f).testTag("paste_order"),
+                                onClick = { pasteOrder() },
+                            )
+                            ToolTile(
+                                label = if (ui.recognizing) "识别中…" else "识图填单",
+                                caption = "OCR + 挂图",
+                                icon = R.drawable.ic_gallery,
+                                modifier = Modifier.weight(1f).testTag("ocr_order"),
+                                onClick = {
+                                    ocrLauncher.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                            )
+                            ToolTile(
+                                label = "语音速记",
+                                caption = "说出房号",
+                                icon = R.drawable.ic_mic,
+                                modifier = Modifier.weight(1f).testTag("voice_input"),
+                                onClick = {
+                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                        putExtra(
+                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                        )
+                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "说出位置、楼层和房号")
+                                    }
+                                    try {
+                                        voiceLauncher.launch(intent)
+                                    } catch (_: ActivityNotFoundException) {
+                                        voiceFailed = true
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+
+                if (buildingMatch != null && ui.draft.location.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    val profile = buildingMatch!!
+                    InfoBanner(
+                        text = buildString {
+                            append("已有该楼栋攻略：")
+                            append(profile.elevatorType.elevatorLabel())
+                            if (profile.accessCode.isNotBlank()) append(" · 门禁 #${profile.accessCode}")
+                        },
+                        actionLabel = "一键带入",
+                        onAction = { viewModel.applyBuilding(profile) },
+                    )
+                }
+                customerMatch?.let { customer ->
+                    Spacer(Modifier.height(12.dp))
+                    if (customer.hasRisk) {
+                        RiskBanner(
+                            title = "历史雷区预警",
+                            body = buildString {
+                                append("已送 ${customer.total} 次")
+                                if (customer.tags.isNotEmpty()) {
+                                    append(" · ").append(customer.tags.joinToString(" / "))
+                                }
+                                if (customer.lastRemark.isNotBlank()) {
+                                    append(" · ").append(customer.lastRemark)
+                                }
+                            },
+                        )
+                    } else {
+                        InfoBanner(
+                            text = "熟客：已送 ${customer.total} 次 · 会下楼 ${customer.willComeDown} 次",
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                // ---- Card 1: decision ----
+                FormCard(title = "爬楼决策") {
+                    TileSegmentedSelector(
+                        options = listOf(
+                            TriState.YES to "不用爬楼",
+                            TriState.NO to "要爬楼",
+                            TriState.UNKNOWN to "待确认",
+                        ),
                         selected = ui.draft.noStairs,
                         onSelect = viewModel::setNoStairs,
+                        testTagPrefix = "decision_tile",
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val presets = when (ui.draft.noStairs) {
+                            TriState.YES -> ClimbReasons.noStairs
+                            TriState.NO -> ClimbReasons.stairs
+                            else -> ClimbReasons.uncertain
+                        }
+                        presets.forEach { reason ->
+                            FilterChip(
+                                selected = ui.draft.climbNote.contains(reason),
+                                onClick = {
+                                    val current = ui.draft.climbNote
+                                    val next = if (current.isBlank()) {
+                                        reason
+                                    } else if (current.contains(reason)) {
+                                        current.replace("、$reason", "").replace(reason, "")
+                                    } else {
+                                        "$current、$reason"
+                                    }
+                                    viewModel.setClimbNote(next.trim('、', ' '))
+                                },
+                                label = { Text(reason) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = ui.draft.climbNote,
                         onValueChange = viewModel::setClimbNote,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_climb_note"),
+                        modifier = Modifier.fillMaxWidth().testTag("field_climb_note"),
                         label = { Text(climbNoteLabel(ui.draft.noStairs)) },
                         placeholder = { Text(climbNotePlaceholder(ui.draft.noStairs)) },
                         supportingText = { Text("选填 · ${ui.draft.climbNote.length}/300") },
@@ -397,41 +484,15 @@ fun RecordEditScreen(
                         maxLines = 4,
                         shape = RoundedCornerShape(12.dp),
                     )
-                    Spacer(Modifier.height(20.dp))
-                    SectionHeader("订单")
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(
-                            onClick = { pasteOrder() },
-                            modifier = Modifier.testTag("paste_order"),
-                        ) {
-                            Text("从剪贴板填入", style = MaterialTheme.typography.labelLarge)
-                        }
-                        TextButton(
-                            onClick = {
-                                ocrImageLauncher.launch(
-                                    PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.testTag("ocr_order"),
-                        ) {
-                            Text(
-                                text = if (isRecognizing) "识别中…" else "识别订单截图",
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
+                }
+
+                Spacer(Modifier.height(16.dp))
+                // ---- Card 2: place + access ----
+                FormCard(title = "位置、楼层与门禁") {
                     OutlinedTextField(
                         value = ui.draft.location,
                         onValueChange = viewModel::setLocation,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_location"),
+                        modifier = Modifier.fillMaxWidth().testTag("field_location"),
                         label = { Text("位置 *") },
                         placeholder = { Text("小区 / 楼栋，如 阳光花园 3 栋") },
                         isError = ui.errors.location != null,
@@ -441,31 +502,32 @@ fun RecordEditScreen(
                         trailingIcon = {
                             if (isLocating) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .semantics {
-                                            contentDescription = "正在获取当前位置"
-                                        },
+                                    modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
                                 )
                             } else {
-                                IconButton(
-                                    onClick = {
-                                        if (LocationHelper.hasPermission(context)) {
-                                            locationRequestId++
-                                        } else {
-                                            locationPermissionLauncher.launch(
-                                                arrayOf(
-                                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("use_location"),
-                                ) {
+                                IconButton(onClick = {
+                                    val fine = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    val coarse = androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                    if (fine || coarse) {
+                                        locationRequestId++
+                                    } else {
+                                        locationPermissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            ),
+                                        )
+                                    }
+                                }) {
                                     Icon(
-                                        Icons.Filled.LocationOn,
+                                        painter = painterResource(R.drawable.ic_link),
                                         contentDescription = "使用当前位置",
                                     )
                                 }
@@ -475,150 +537,216 @@ fun RecordEditScreen(
                     if (recentLocations.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            recentLocations.take(6).forEach { location ->
-                                AssistChip(
-                                    onClick = {
-                                        viewModel.setLocation(location)
-                                        focusManager.clearFocus()
-                                    },
-                                    label = { Text(location, maxLines = 1) },
+                            recentLocations.take(6).forEach { place ->
+                                FilterChip(
+                                    selected = ui.draft.location == place,
+                                    onClick = { viewModel.setLocation(place) },
+                                    label = { Text(place, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 )
                             }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = ui.draft.orderNo,
-                        onValueChange = viewModel::setOrderNo,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_order"),
-                        label = { Text("订单号") },
-                        placeholder = { Text("选填") },
-                        isError = ui.errors.orderNo != null,
-                        supportingText = ui.errors.orderNo?.let { { Text(it) } },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = ui.draft.phoneTail,
-                        onValueChange = viewModel::setPhoneTail,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_tail"),
-                        label = { Text("手机尾号") },
-                        placeholder = { Text("4 位数字，选填") },
-                        isError = ui.errors.phoneTail != null,
-                        supportingText = ui.errors.phoneTail?.let { { Text(it) } },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next,
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Text(
-                        text = "性别",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(
-                            Gender.MALE to "男",
-                            Gender.FEMALE to "女",
-                            Gender.UNKNOWN to "未知",
-                        ).forEach { (gender, label) ->
-                            LouJiFilterChip(
-                                selected = ui.draft.gender == gender,
-                                onClick = { viewModel.setGender(gender) },
-                                label = { Text(label) },
-                                modifier = Modifier.testTag("gender_${gender.name}"),
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(24.dp))
-                    SectionHeader("楼层与门")
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(
                             value = ui.draft.floor,
                             onValueChange = viewModel::setFloor,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("field_floor"),
+                            modifier = Modifier.weight(1f).testTag("field_floor"),
                             label = { Text("楼层") },
-                            placeholder = { Text("7 / B1") },
-                            isError = ui.errors.floor != null,
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
                         OutlinedTextField(
                             value = ui.draft.roomNo,
                             onValueChange = viewModel::setRoomNo,
-                            modifier = Modifier
-                                .weight(1.35f)
-                                .testTag("field_room"),
+                            modifier = Modifier.weight(1.4f).testTag("field_room"),
                             label = { Text("房号") },
-                            placeholder = { Text("2-301") },
-                            isError = ui.errors.roomNo != null,
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
                     }
-                    Spacer(Modifier.height(14.dp))
-                    TriStateSelector(
-                        label = "门是否完好",
-                        value = ui.draft.doorIntact,
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf("B1", "1", "2", "3", "4", "5", "6", "7").forEach { floor ->
+                            FilterChip(
+                                selected = ui.draft.floor == floor,
+                                onClick = { viewModel.setFloor(floor) },
+                                label = { Text(floor) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = ui.draft.accessCode,
+                        onValueChange = viewModel::setAccessCode,
+                        modifier = Modifier.fillMaxWidth().testTag("field_access_code"),
+                        label = { Text("门禁密码") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_key),
+                                contentDescription = null,
+                            )
+                        },
+                        trailingIcon = {
+                            if (ui.draft.accessCode.isNotBlank()) {
+                                CopyableCodeBadge(code = ui.draft.accessCode)
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("电梯类型", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = ElevatorType.entries.map { it to it.elevatorLabel() },
+                        selected = ui.draft.elevatorType,
+                        onSelect = viewModel::setElevatorType,
+                        columns = 2,
+                        testTagPrefix = "elevator",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("门是否完好", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = listOf(
+                            TriState.YES to "完好",
+                            TriState.NO to "有问题",
+                            TriState.UNKNOWN to "未知",
+                        ),
+                        selected = ui.draft.doorIntact,
                         onSelect = viewModel::setDoorIntact,
-                        yesLabel = "完好",
-                        noLabel = "有问题",
                         testTagPrefix = "door",
                     )
-                    Spacer(Modifier.height(14.dp))
-                    TriStateSelector(
-                        label = "上面能开门",
-                        value = ui.draft.canOpenFromAbove,
+                    Spacer(Modifier.height(10.dp))
+                    Text("上面能否开门", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = listOf(
+                            TriState.YES to "能开门",
+                            TriState.NO to "不能开",
+                            TriState.UNKNOWN to "未知",
+                        ),
+                        selected = ui.draft.canOpenFromAbove,
                         onSelect = viewModel::setCanOpenFromAbove,
-                        supportingText = "楼上 / 远程能否开门",
-                        yesLabel = "能",
-                        noLabel = "不能",
                         testTagPrefix = "open_above",
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "保存时同步更新楼栋攻略",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Switch(
+                            checked = ui.syncBuildingProfile,
+                            onCheckedChange = viewModel::setSyncBuildingProfile,
+                        )
+                    }
+                }
 
-                    Spacer(Modifier.height(24.dp))
-                    SectionHeader("客户")
-                    Spacer(Modifier.height(14.dp))
-                    TriStateSelector(
-                        label = "会下来拿",
-                        value = ui.draft.willComeDown,
+                Spacer(Modifier.height(16.dp))
+                // ---- Card 3: customer ----
+                FormCard(title = "客户与交付") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = ui.draft.phoneTail,
+                            onValueChange = viewModel::setPhoneTail,
+                            modifier = Modifier.weight(1f).testTag("field_tail"),
+                            label = { Text("手机尾号") },
+                            singleLine = true,
+                            isError = ui.errors.phoneTail != null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        OutlinedTextField(
+                            value = ui.draft.phoneExt,
+                            onValueChange = viewModel::setPhoneExt,
+                            modifier = Modifier.weight(1f).testTag("field_ext"),
+                            label = { Text("分机号") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("性别", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = listOf(Gender.MALE to "男", Gender.FEMALE to "女", Gender.UNKNOWN to "未知"),
+                        selected = ui.draft.gender,
+                        onSelect = viewModel::setGender,
+                        testTagPrefix = "gender",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("客户会下楼吗", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = listOf(
+                            TriState.YES to "会下楼",
+                            TriState.NO to "不会",
+                            TriState.UNKNOWN to "未知",
+                        ),
+                        selected = ui.draft.willComeDown,
                         onSelect = viewModel::setWillComeDown,
-                        supportingText = "客户是否愿意下楼取",
-                        yesLabel = "会",
-                        noLabel = "不会",
                         testTagPrefix = "come_down",
                     )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = "客户性格",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
+                    Spacer(Modifier.height(10.dp))
+                    Text("交付偏好", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    TileSegmentedSelector(
+                        options = listOf(
+                            DeliveryMethod.DOORSTEP to "放门口",
+                            DeliveryMethod.COME_DOWN to "下楼拿",
+                            DeliveryMethod.LOCKER to "外卖柜",
+                            DeliveryMethod.HAND_TO_HAND to "当面交",
+                        ),
+                        selected = ui.draft.deliveryMethod,
+                        onSelect = viewModel::setDeliveryMethod,
+                        columns = 2,
+                        testTagPrefix = "delivery",
                     )
-                    Spacer(Modifier.height(4.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(0.dp),
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = LocalLouJiStatusColors.current.dangerContainer,
                     ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_warning),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = LocalLouJiStatusColors.current.danger,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "标记为避坑 / 雷区记录",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = LocalLouJiStatusColors.current.onDangerContainer,
+                            )
+                            Switch(
+                                checked = ui.draft.isWarning,
+                                onCheckedChange = viewModel::setWarning,
+                                modifier = Modifier.testTag("warning_switch"),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PersonalityTags.presets.forEach { tag ->
-                            LouJiFilterChip(
+                            FilterChip(
                                 selected = tag in ui.draft.personalityTags,
                                 onClick = { viewModel.toggleTag(tag) },
                                 label = { Text(tag) },
@@ -626,169 +754,195 @@ fun RecordEditScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = ui.draft.personalityNote,
                         onValueChange = viewModel::setPersonalityNote,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_note"),
+                        modifier = Modifier.fillMaxWidth().testTag("field_note"),
                         label = { Text("性格备注") },
-                        placeholder = { Text("好沟通、要求放门口、电话不接…") },
-                        isError = ui.errors.note != null,
-                        supportingText = {
-                            Text(ui.errors.note ?: "${ui.draft.personalityNote.length}/200")
-                        },
-                        minLines = 3,
-                        maxLines = 5,
+                        supportingText = { Text("选填 · ${ui.draft.personalityNote.length}/200") },
+                        minLines = 2,
+                        maxLines = 3,
                         shape = RoundedCornerShape(12.dp),
                     )
+                }
 
-                    Spacer(Modifier.height(24.dp))
-                    SectionHeader("备注")
-                    Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(16.dp))
+                // ---- Card 4: order + remark ----
+                FormCard(title = "订单与备注") {
+                    OutlinedTextField(
+                        value = ui.draft.orderNo,
+                        onValueChange = viewModel::setOrderNo,
+                        modifier = Modifier.fillMaxWidth().testTag("field_order"),
+                        label = { Text("订单号") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = ui.draft.remark,
                         onValueChange = viewModel::setRemark,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("field_remark"),
-                        label = { Text("备注") },
-                        placeholder = { Text("门禁、电梯、放门口位置，或任何要记住的事…") },
-                        supportingText = { Text("${ui.draft.remark.length}/300") },
-                        minLines = 3,
-                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth().testTag("field_remark"),
+                        label = { Text("通用备注") },
+                        supportingText = { Text("选填 · ${ui.draft.remark.length}/300") },
+                        minLines = 2,
+                        maxLines = 4,
                         shape = RoundedCornerShape(12.dp),
                     )
+                }
 
-                    Spacer(Modifier.height(24.dp))
-                    SectionHeader("现场")
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val existing = ui.existingMedia.filter { it.id !in ui.removedMediaIds }
-                        existing.forEach { attachment ->
-                            MediaTile(
-                                type = attachment.type,
-                                filePath = attachment.filePath,
-                                thumbPath = attachment.thumbPath,
-                                durationMs = attachment.durationMs,
-                                modifier = Modifier.testTag("existing_media_${attachment.id}"),
-                                onRemove = { viewModel.removeExisting(attachment.id) },
-                            )
+                Spacer(Modifier.height(16.dp))
+                // ---- Card 5: media ----
+                FormCard(title = "现场影像") {
+                    if (ui.existingMedia.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ui.existingMedia.forEach { attachment ->
+                                if (attachment.id in ui.removedMediaIds) return@forEach
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box {
+                                        MediaTile(
+                                            type = attachment.type,
+                                            filePath = attachment.filePath,
+                                            thumbPath = attachment.thumbPath,
+                                            durationMs = attachment.durationMs,
+                                            onRemove = { viewModel.removeExisting(attachment.id) },
+                                        )
+                                        if (attachment.type == com.quabtun.louji.model.MediaType.IMAGE) {
+                                            IconButton(
+                                                onClick = {
+                                                    showCategorySheetFor = attachment.id
+                                                },
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .size(30.dp)
+                                                    .background(
+                                                        androidx.compose.ui.graphics.Color.Black
+                                                            .copy(alpha = 0.55f),
+                                                        RoundedCornerShape(15.dp),
+                                                    ),
+                                            ) {
+                                                Icon(
+                                                    Icons.Filled.Create,
+                                                    contentDescription = "标注",
+                                                    tint = androidx.compose.ui.graphics.Color.White,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = attachment.category.categoryLabel(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
-                        ui.pendingMedia.forEachIndexed { index, media ->
-                            MediaTile(
-                                type = media.type,
-                                filePath = media.filePath,
-                                thumbPath = media.thumbPath,
-                                durationMs = media.durationMs,
-                                modifier = Modifier.testTag("pending_media_$index"),
-                                onRemove = { viewModel.removePending(media) },
-                            )
-                        }
-                        val count = existing.size + ui.pendingMedia.size
-                        if (count < 20) {
-                            AddMediaTile(
-                                onClick = { showMediaSheet = true },
-                                modifier = Modifier.testTag("add_media"),
-                            )
-                        }
-                    }
-                    if (ui.importing) {
                         Spacer(Modifier.height(10.dp))
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "正在导入附件…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "截图、照片、视频只保存在本机；一条记录最多 20 个附件。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (ui.errors.media != null) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = ui.errors.media!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    if (ui.pendingMedia.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ui.pendingMedia.forEachIndexed { index, media ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    MediaTile(
+                                        type = media.type,
+                                        filePath = media.filePath,
+                                        thumbPath = media.thumbPath,
+                                        durationMs = media.durationMs,
+                                        modifier = Modifier.testTag("pending_media_$index"),
+                                        onRemove = { viewModel.removePending(media) },
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    TextButton(
+                                        onClick = { showPendingCategoryFor = index },
+                                        contentPadding = PaddingValues(2.dp),
+                                    ) {
+                                        Text(
+                                            text = media.category.categoryLabel(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "所有内容仅存本机，可在设置中导出备份。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    OutlinedButton(
+                        onClick = { showMediaSheet = true },
+                        modifier = Modifier.fillMaxWidth().testTag("add_media"),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("添加现场附件")
+                    }
                 }
             }
         }
     }
 
     if (showMediaSheet) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
+        AlertDialog(
             onDismissRequest = { showMediaSheet = false },
-            sheetState = sheetState,
-        ) {
-            Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                Text(
-                    text = "添加现场附件",
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                MediaSheetRow(
-                    icon = R.drawable.ic_camera,
-                    title = "拍照",
-                    subtitle = "直接拍门口、楼层或门锁",
-                    testTag = "media_photo",
-                    onClick = {
-                        showMediaSheet = false
-                        cameraVideo = false
-                        showCamera = true
-                    },
-                )
-                MediaSheetRow(
-                    icon = R.drawable.ic_video,
-                    title = "录像",
-                    subtitle = "最长 2 分钟，可带声音",
-                    testTag = "media_video",
-                    onClick = {
-                        showMediaSheet = false
-                        cameraVideo = true
-                        showCamera = true
-                    },
-                )
-                MediaSheetRow(
-                    icon = R.drawable.ic_gallery,
-                    title = "从相册选截图 / 照片 / 视频",
-                    subtitle = "选系统截图、相册里的图片或视频",
-                    testTag = "media_gallery",
-                    onClick = {
-                        showMediaSheet = false
-                        galleryLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                        )
-                    },
-                )
-            }
-        }
+            title = { Text("添加现场附件") },
+            text = {
+                Column {
+                    Text("从相册选截图 / 照片 / 视频，或直接拍照录像。")
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(
+                        onClick = {
+                            showMediaSheet = false
+                            galleryLauncher.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageAndVideo,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("从相册选择") }
+                    TextButton(
+                        onClick = {
+                            showMediaSheet = false
+                            cameraVideo = false
+                            showCamera = true
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("media_photo"),
+                    ) { Text("拍照") }
+                    TextButton(
+                        onClick = {
+                            showMediaSheet = false
+                            cameraVideo = true
+                            showCamera = true
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("media_video"),
+                    ) { Text("录像") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showMediaSheet = false }) { Text("取消") } },
+        )
+    }
+
+    if (ui.loadFailed) {
+        AlertDialog(
+            onDismissRequest = onBack,
+            title = { Text("记录不存在") },
+            text = { Text("这条记录可能已经被删除。") },
+            confirmButton = { TextButton(onClick = onBack) { Text("返回") } },
+        )
     }
 
     if (showDiscardDialog) {
         ConfirmDialog(
-            title = "放弃这次记录？",
-            text = "还没保存的内容和刚添加的附件会丢失。",
+            title = "放弃这单？",
+            text = "已填写的内容和刚拍的照片不会保存。",
             confirmLabel = "放弃",
             destructive = true,
             onConfirm = {
@@ -800,71 +954,146 @@ fun RecordEditScreen(
         )
     }
 
+    if (voiceFailed) {
+        AlertDialog(
+            onDismissRequest = { voiceFailed = false },
+            title = { Text("没有可用的语音识别") },
+            text = { Text("这台设备没有语音识别引擎，请改用粘贴或手动填写。") },
+            confirmButton = { TextButton(onClick = { voiceFailed = false }) { Text("知道了") } },
+        )
+    }
+
     pendingPaste?.let { parsed ->
         AlertDialog(
             onDismissRequest = { pendingPaste = null },
             title = { Text("用${pendingFillLabel}填入？") },
-            text = {
-                Text("会覆盖已填写的对应字段：\n\n${parsed.summary()}")
-            },
+            text = { Text("会覆盖已填写的对应字段：\n\n${parsed.summary()}") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         pendingPaste = null
-                        applyParsedOrder(parsed, pendingFillLabel)
+                        viewModel.applyParsed(parsed, overwrite = true)
+                        scope.launch {
+                            snackbar.showSnackbar("已从${pendingFillLabel}填入")
+                        }
                     },
                 ) { Text("填入") }
             },
-            dismissButton = {
-                TextButton(onClick = { pendingPaste = null }) { Text("取消") }
-            },
+            dismissButton = { TextButton(onClick = { pendingPaste = null }) { Text("取消") } },
         )
     }
 
-    if (ui.loadFailed) {
-        AlertDialog(
-            onDismissRequest = onBack,
-            title = { Text("记录不存在") },
-            text = { Text("这条记录可能已经被删除。") },
-            confirmButton = {
-                TextButton(onClick = onBack) { Text("返回") }
+    showCategorySheetFor?.let { attachmentId ->
+        CategoryDialog(
+            onDismiss = { showCategorySheetFor = null },
+            onPick = { category ->
+                showCategorySheetFor = null
+                viewModel.setExistingCategory(attachmentId, category)
+            },
+        )
+    }
+    showPendingCategoryFor?.let { index ->
+        val media = ui.pendingMedia.getOrNull(index)
+        CategoryDialog(
+            onDismiss = { showPendingCategoryFor = null },
+            onPick = { category ->
+                showPendingCategoryFor = null
+                media?.let { viewModel.setPendingCategory(it, category) }
             },
         )
     }
 }
 
 @Composable
-private fun AddMediaTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ToolTile(
+    label: String,
+    caption: String,
+    icon: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Surface(
-        modifier = modifier
-            .size(92.dp)
-            .semantics { contentDescription = "添加现场附件" }
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
-        ),
+        onClick = onClick,
+        modifier = modifier.height(78.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                Icons.Filled.Add,
+                painter = painterResource(icon),
                 contentDescription = null,
+                modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "添加",
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = caption,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
     }
+}
+
+@Composable
+private fun FormCard(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(width = 3.dp, height = 14.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun CategoryDialog(onDismiss: () -> Unit, onPick: (AttachmentCategory) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("附件分类") },
+        text = {
+            Column {
+                AttachmentCategory.entries.forEach { category ->
+                    TextButton(
+                        onClick = { onPick(category) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(category.categoryLabel(), modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 private fun climbNoteLabel(noStairs: TriState): String = when (noStairs) {
@@ -874,41 +1103,7 @@ private fun climbNoteLabel(noStairs: TriState): String = when (noStairs) {
 }
 
 private fun climbNotePlaceholder(noStairs: TriState): String = when (noStairs) {
-    TriState.YES -> "例如：客户会下楼拿、电梯直达、放快递柜…"
-    TriState.NO -> "例如：电梯坏了、客户要求送上门、没有电梯…"
-    TriState.UNKNOWN -> "例如：还没问到会不会下楼…"
-}
-
-@Composable
-private fun MediaSheetRow(
-    icon: Int,
-    title: String,
-    subtitle: String,
-    testTag: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(testTag)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            modifier = Modifier.size(26.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(16.dp))
-        Column {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    TriState.YES -> "如：电梯直达 / 客户下楼拿"
+    TriState.NO -> "如：老小区无电梯 / 电梯坏了"
+    TriState.UNKNOWN -> "先去楼下看看，回来再补"
 }

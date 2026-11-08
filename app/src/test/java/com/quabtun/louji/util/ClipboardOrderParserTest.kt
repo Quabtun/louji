@@ -38,8 +38,8 @@ class ClipboardOrderParserTest {
             """.trimIndent(),
         )
 
-        assertEquals("阳光花园3号楼2单元501室", parsed.location)
-        assertNull(parsed.floor)
+        assertEquals("阳光花园3号楼2单元", parsed.location)
+        assertEquals("5", parsed.floor)
         assertEquals("501", parsed.roomNo)
         assertEquals("4821", parsed.phoneTail)
         assertEquals(Gender.MALE, parsed.gender)
@@ -84,5 +84,56 @@ class ClipboardOrderParserTest {
         assertEquals("2103", parsed.roomNo)
         assertEquals("2145", parsed.phoneTail)
         assertEquals(Gender.FEMALE, parsed.gender)
+    }
+
+    @Test
+    fun extractsVirtualNumberExtension() {
+        val a = ClipboardOrderParser.parse("138****1234转5678 阳光花园3栋")
+        assertEquals("1234", a.phoneTail)
+        assertEquals("5678", a.phoneExt)
+
+        val b = ClipboardOrderParser.parse("13812349876-5678")
+        assertEquals("9876", b.phoneTail)
+        assertEquals("5678", b.phoneExt)
+
+        val c = ClipboardOrderParser.parse("手机尾号4821 分机号 902")
+        assertEquals("4821", c.phoneTail)
+        assertEquals("902", c.phoneExt)
+    }
+
+    @Test
+    fun splitsCompoundAddressIntoBuildingFloorRoom() {
+        val a = ClipboardOrderParser.parse("阳光花园三期12栋2单元1804室")
+        assertEquals("阳光花园三期12栋2单元", a.location)
+        assertEquals("18", a.floor)
+        assertEquals("1804", a.roomNo)
+
+        val b = ClipboardOrderParser.parse("锦绣公寓B座7楼702")
+        assertEquals("锦绣公寓B座", b.location)
+        assertEquals("7", b.floor)
+        assertEquals("702", b.roomNo)
+
+        val c = ClipboardOrderParser.parse("老城小区3号楼B1-105")
+        assertEquals("老城小区3号楼", c.location)
+        assertEquals("B1", c.floor)
+        assertEquals("B1-105", c.roomNo)
+    }
+
+    @Test
+    fun mapsDeliveryPreferencesAndRemarkHints() {
+        assertEquals(
+            com.quabtun.louji.model.DeliveryMethod.LOCKER,
+            ClipboardOrderParser.parse("放外卖柜").deliveryMethod,
+        )
+        assertEquals(
+            com.quabtun.louji.model.DeliveryMethod.COME_DOWN,
+            ClipboardOrderParser.parse("客户会下楼拿").deliveryMethod,
+        )
+        assertEquals(
+            com.quabtun.louji.model.DeliveryMethod.DOORSTEP,
+            ClipboardOrderParser.parse("放门口，别敲门").deliveryMethod,
+        )
+        val hint = ClipboardOrderParser.parse("放鞋架 别按铃 家里有狗").remarkHint
+        assertEquals("别按铃、家里有狗", hint)
     }
 }

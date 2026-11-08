@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">楼记</string>
+    <string name="shortcut_quick_record">极速记一单</string>
+    <string name="shortcut_quick_record_long">直接打开新建记录</string>
+    <string name="shortcut_paste_record">粘贴运单建单</string>
+    <string name="shortcut_paste_record_long">新建并自动解析剪贴板</string>
+    <string name="shortcut_search">秒查楼栋/尾号</string>
+    <string name="shortcut_search_long">打开台账并聚焦搜索</string>
 </resources>

@@ -506,48 +506,13 @@ fun EmptyState(
     icon: Painter? = painterResource(R.drawable.ic_stairs),
     action: (@Composable () -> Unit)? = null,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 28.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (icon != null) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (action != null) {
-            Spacer(Modifier.height(18.dp))
-            action()
-        }
-    }
+    ModernEmptyState(
+        title = title,
+        body = body,
+        modifier = modifier,
+        icon = icon,
+        action = action,
+    )
 }
 
 @Composable
@@ -611,4 +576,333 @@ fun InfoIcon(description: String = "说明") {
         contentDescription = description,
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+// ---------------------------------------------------------------------------
+// 2.0 shared components — compact facts, copyable codes, tile selectors.
+// ---------------------------------------------------------------------------
+
+enum class PillTone { PASS, CLIMB, DANGER, INFO, NEUTRAL }
+
+private data class PillColors(val fg: Color, val bg: Color, val border: Color)
+
+@Composable
+private fun pillColors(tone: PillTone): PillColors {
+    val s = LocalLouJiStatusColors.current
+    return when (tone) {
+        PillTone.PASS -> PillColors(s.noStair, s.noStairContainer, s.noStair.copy(alpha = 0.35f))
+        PillTone.CLIMB -> PillColors(s.stair, s.stairContainer, s.stair.copy(alpha = 0.35f))
+        PillTone.DANGER -> PillColors(s.danger, s.dangerContainer, s.danger.copy(alpha = 0.35f))
+        PillTone.INFO -> PillColors(s.info, s.infoContainer, s.info.copy(alpha = 0.35f))
+        PillTone.NEUTRAL -> PillColors(
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.outlineVariant,
+        )
+    }
+}
+
+/** Compact structured fact: icon + short label, replaces long plain-text lines. */
+@Composable
+fun SemanticPill(
+    text: String,
+    tone: PillTone = PillTone.NEUTRAL,
+    modifier: Modifier = Modifier,
+    iconRes: Int? = null,
+) {
+    val colors = pillColors(tone)
+    Surface(
+        modifier = modifier,
+        color = colors.bg,
+        contentColor = colors.fg,
+        shape = RoundedCornerShape(7.dp),
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** Access-code badge: tap to copy, with haptic feedback and a snackbar hint. */
+@Composable
+fun CopyableCodeBadge(
+    code: String,
+    modifier: Modifier = Modifier,
+    onCopied: (() -> Unit)? = null,
+) {
+    val colors = pillColors(PillTone.INFO)
+    val haptics = LocalHapticFeedback.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(7.dp))
+            .clickable {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(code))
+                onCopied?.invoke()
+            }
+            .testTag("access_code_badge"),
+        color = colors.bg,
+        contentColor = colors.fg,
+        shape = RoundedCornerShape(7.dp),
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_key),
+                contentDescription = "门禁密码，点击复制",
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                text = "#$code",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontFeatureSettings = "tnum",
+                ),
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** Large, glove-friendly segmented selector used for decisions and enum fields. */
+@Composable
+fun <T> TileSegmentedSelector(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    testTagPrefix: String? = null,
+    columns: Int = 0,
+) {
+    val haptics = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        val rows = if (columns > 0) options.chunked(columns) else listOf(options)
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                row.forEach { (value, label) ->
+                    val isSelected = value == selected
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .testTag(
+                                if (testTagPrefix != null) {
+                                    "${testTagPrefix}_${options.indexOfFirst { it.first == value }}"
+                                } else {
+                                    "tile_${options.indexOfFirst { it.first == value }}"
+                                },
+                            )
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.RadioButton,
+                                onClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onSelect(value)
+                                },
+                            ),
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.surface
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (isSelected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        shape = RoundedCornerShape(9.dp),
+                        border = if (isSelected) {
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+                        } else {
+                            null
+                        },
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 12.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+                if (columns > 0 && row.size < columns) {
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/** Soft double-ring empty state that never uses a mint block on amber. */
+@Composable
+fun ModernEmptyState(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    icon: Painter? = painterResource(R.drawable.ic_stairs),
+    action: (@Composable () -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (action != null) {
+            Spacer(Modifier.height(18.dp))
+            action()
+        }
+    }
+}
+
+/** Coral risk banner used for warning records and door faults. */
+@Composable
+fun RiskBanner(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+) {
+    val s = LocalLouJiStatusColors.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = s.dangerContainer,
+        contentColor = s.onDangerContainer,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, s.danger.copy(alpha = 0.35f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_warning),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = s.danger,
+            )
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(text = body, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/** Blue tip banner used for building-profile matches. */
+@Composable
+fun InfoBanner(
+    text: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    val s = LocalLouJiStatusColors.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = s.infoContainer,
+        contentColor = s.onInfoContainer,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, s.info.copy(alpha = 0.28f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_building),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = s.info,
+            )
+            Text(
+                text = text,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (actionLabel != null && onAction != null) {
+                TextButton(onClick = onAction, contentPadding = androidx.compose.foundation.layout.PaddingValues(6.dp)) {
+                    Text(actionLabel, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+    }
 }

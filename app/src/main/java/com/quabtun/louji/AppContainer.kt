@@ -5,7 +5,9 @@ import com.quabtun.louji.data.AppLockController
 import com.quabtun.louji.data.BackupManager
 import com.quabtun.louji.data.DeleteUndoController
 import com.quabtun.louji.data.DiagnosticLog
+import com.quabtun.louji.data.ShareIntake
 import com.quabtun.louji.data.LocalMediaStore
+import com.quabtun.louji.data.OrderTextRecognizer
 import com.quabtun.louji.data.RecordRepository
 import com.quabtun.louji.data.SettingsStore
 import com.quabtun.louji.data.db.LouJiDatabase
@@ -14,7 +16,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-class AppContainer(context: Context) {
+class AppContainer(private val context: Context) {
+    val appContext: Context get() = context
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val database: LouJiDatabase = LouJiDatabase.build(context)
@@ -26,4 +29,6 @@ class AppContainer(context: Context) {
     val lock = AppLockController(settings.settings, applicationScope)
     val deleteUndo = DeleteUndoController()
     val diagnostics = DiagnosticLog(context)
+    val shareIntake = ShareIntake()
+    val orderTextRecognizer = OrderTextRecognizer(context)
 }

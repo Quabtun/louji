@@ -63,9 +63,70 @@ class BackupJsonTest {
             mediaCount = 3,
         )
         val decoded = json.decodeFromString<BackupManifest>(json.encodeToString(manifest))
-        assertEquals(1, decoded.schema)
+        assertEquals(2, decoded.schema)
         assertEquals("louji", decoded.app)
         assertEquals(2, decoded.recordCount)
         assertEquals(3, decoded.mediaCount)
+    }
+
+    @Test
+    fun schema2FieldsRoundTrip() {
+        val record = BackupRecord(
+            location = "云顶小区",
+            orderNo = "B2",
+            phoneTail = "1234",
+            phoneExt = "5678",
+            accessCode = "2580",
+            elevatorType = "CARD_CONTROL",
+            deliveryMethod = "LOCKER",
+            isWarning = true,
+            createdAt = 1L,
+            updatedAt = 2L,
+        )
+        val decoded = json.decodeFromString<BackupRecord>(json.encodeToString(record))
+        assertEquals("5678", decoded.phoneExt)
+        assertEquals("2580", decoded.accessCode)
+        assertEquals("CARD_CONTROL", decoded.elevatorType)
+        assertEquals("LOCKER", decoded.deliveryMethod)
+        assertTrue(decoded.isWarning)
+    }
+
+    @Test
+    fun schema1RecordsStillDeserialize() {
+        val legacy = """
+            {"location":"老小区","orderNo":"A1","gender":"MALE","phoneTail":"4821",
+             "floor":"6","roomNo":"601","doorIntact":"YES","canOpenFromAbove":"NO",
+             "noStairs":"NO","willComeDown":"NO","personalityTags":["好沟通"],
+             "personalityNote":"","remark":"","climbNote":"电梯坏了",
+             "archived":true,"createdAt":100,"updatedAt":200,
+             "attachments":[{"type":"IMAGE","file":"media/0_0.jpg","mimeType":"image/jpeg",
+             "sizeBytes":10,"durationMs":0}]}
+        """.trimIndent()
+        val decoded = json.decodeFromString<BackupRecord>(legacy)
+        assertEquals("老小区", decoded.location)
+        assertEquals("电梯坏了", decoded.climbNote)
+        assertTrue(decoded.archived)
+        assertEquals("", decoded.phoneExt)
+        assertEquals("UNKNOWN", decoded.elevatorType)
+        assertEquals("OTHER", decoded.attachments.single().category)
+    }
+
+    @Test
+    fun buildingProfileRoundTrips() {
+        val building = BackupBuilding(
+            location = "江景苑",
+            elevatorType = "HALF_FLOOR",
+            accessCode = "2580",
+            doorIntact = "NO",
+            canOpenFromAbove = "YES",
+            lockerInfo = "门口丰巢",
+            accessTags = listOf("有恶犬"),
+            notes = "西侧小门上楼更快",
+            pinned = true,
+            createdAt = 1,
+            updatedAt = 2,
+        )
+        val decoded = json.decodeFromString<BackupBuilding>(json.encodeToString(building))
+        assertEquals(building, decoded)
     }
 }

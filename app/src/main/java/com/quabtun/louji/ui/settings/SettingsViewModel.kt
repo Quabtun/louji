@@ -172,4 +172,23 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
     }
+
+    fun exportCsv(uri: android.net.Uri, desensitised: Boolean) {
+        viewModelScope.launch {
+            _backup.value = BackupUiState(running = true, progress = null)
+            try {
+                val count = container.backup.exportCsv(uri, desensitised)
+                _backup.value = BackupUiState(message = "已导出 $count 条记录（CSV）")
+                container.diagnostics.log(
+                    "csv_export",
+                    "records=$count desensitised=$desensitised",
+                )
+            } catch (error: Throwable) {
+                _backup.value = BackupUiState(
+                    message = error.message ?: "导出 CSV 失败",
+                    isError = true,
+                )
+            }
+        }
+    }
 }
