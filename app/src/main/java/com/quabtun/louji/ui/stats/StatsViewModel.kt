@@ -25,6 +25,7 @@ data class StatsData(
     val totals: ClimbTotals = ClimbTotals(),
     val decision: DecisionStats = DecisionStats(),
     val buckets: List<DayBucket> = emptyList(),
+    val period: StatsPeriod = StatsPeriod.MONTH,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,18 +41,24 @@ class StatsViewModel(private val repository: RecordRepository) : ViewModel() {
             combine(
                 repository.observeClimbTotals(since, until),
                 repository.observeDayBuckets(since),
-                repository.observeInsights(),
+                repository.observeInsights(since, until),
             ) { totals, buckets, insights ->
                 StatsData(
                     totals = totals,
                     decision = insights.decision,
                     buckets = buckets,
+                    period = period,
                 )
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsData())
 
-    val rankings: StateFlow<List<BuildingRank>> = repository.observeBuildingRankings()
+    /** Rankings follow the same period as the milestone card and donut. */
+    val rankings: StateFlow<List<BuildingRank>> = _period
+        .flatMapLatest { period ->
+            val (since, until) = rangeOf(period)
+            repository.observeBuildingRankingsForRange(since, until)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 84-day heatmap buckets, independent of the selected period. */

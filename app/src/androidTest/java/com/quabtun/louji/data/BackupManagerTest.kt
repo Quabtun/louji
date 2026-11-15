@@ -34,6 +34,8 @@ class BackupManagerTest {
     private lateinit var repositoryB: RecordRepository
     private lateinit var backupA: BackupManager
     private lateinit var backupB: BackupManager
+    private lateinit var mediaStoreA: LocalMediaStore
+    private lateinit var mediaStoreB: LocalMediaStore
 
     @Before
     fun setUp() {
@@ -55,6 +57,8 @@ class BackupManagerTest {
             File(root, "media-b"),
             File(root, "thumbs-b"),
         )
+        mediaStoreA = mediaA
+        mediaStoreB = mediaB
         repositoryA = RecordRepository(databaseA, mediaA) { 1_700_000_000_000L }
         repositoryB = RecordRepository(databaseB, mediaB) { 1_700_000_000_000L }
         backupA = BackupManager(context, repositoryA, mediaA) { 1_700_000_000_000L }
@@ -322,6 +326,100 @@ class BackupManagerTest {
 
         freshFile.deleteRecursively()
         untouched.delete()
+    }
+
+    @Test
+    fun backupRestoresBuildingsCoverAndAttachmentCategory() = runBlocking {
+        // Covers live in app-private media in real use; the store only deletes paths inside it.
+        val cover = File(mediaStoreA.mediaDirectory(), "cover.png").apply {
+            writeBytes(Base64.decode(ONE_PIXEL_PNG, Base64.DEFAULT))
+        }
+        val shot = File(root, "shot.png").apply {
+            writeBytes(Base64.decode(ONE_PIXEL_PNG, Base64.DEFAULT))
+        }
+        repositoryA.save(
+            draft = RecordDraft(
+                location = "江景苑 2 栋",
+                orderNo = "D1",
+                floor = "21",
+                roomNo = "2103",
+            ),
+            recordId = null,
+            pendingMedia = listOf(
+                MediaDraft(
+                    type = MediaType.IMAGE,
+                    filePath = shot.absolutePath,
+                    thumbPath = null,
+                    mimeType = "image/png",
+                    sizeBytes = shot.length(),
+                    durationMs = 0,
+                    category = com.quabtun.louji.model.AttachmentCategory.ORDER_SCREENSHOT,
+                ),
+            ),
+        )
+        repositoryA.saveBuilding(
+            com.quabtun.louji.data.db.BuildingProfileEntity(
+                location = "江景苑 2 栋",
+                elevatorType = com.quabtun.louji.model.ElevatorType.DIRECT,
+                accessCode = "8899",
+                lockerInfo = "丰巢在门卫",
+                accessTags = listOf("刷脸"),
+                notes = "东门常开",
+                coverPhotoPath = cover.absolutePath,
+                pinned = true,
+                createdAt = 1,
+                updatedAt = 1,
+            ),
+        )
+
+        val zip = File(root, "backup-with-buildings.zip")
+        val manifest = backupA.exportBackup(Uri.fromFile(zip))
+        assertEquals(1, manifest.buildingCount)
+
+        val summary = backupB.importBackup(Uri.fromFile(zip), ImportMode.OVERWRITE)
+        assertEquals(1, summary.imported)
+
+        val building = repositoryB.findBuilding("江景苑 2 栋")
+        assertTrue(building != null)
+        assertEquals("8899", building!!.accessCode)
+        assertEquals("丰巢在门卫", building.lockerInfo)
+        assertEquals(listOf("刷脸"), building.accessTags)
+        assertEquals("东门常开", building.notes)
+        assertTrue(building.pinned)
+        assertTrue(building.coverPhotoPath != null)
+        assertTrue(File(building.coverPhotoPath!!).isFile)
+
+        val record = repositoryB.allRecords().single()
+        assertEquals(
+            com.quabtun.louji.model.AttachmentCategory.ORDER_SCREENSHOT,
+            record.attachments.single().category,
+        )
+    }
+
+    @Test
+    fun clearAllRemovesBuildingsAndCoverFiles() = runBlocking {
+        val cover = File(mediaStoreA.mediaDirectory(), "cover-clear.png").apply {
+            writeBytes(Base64.decode(ONE_PIXEL_PNG, Base64.DEFAULT))
+        }
+        repositoryA.save(
+            draft = RecordDraft(location = "老城小区", orderNo = "X1"),
+            recordId = null,
+            pendingMedia = emptyList(),
+        )
+        repositoryA.saveBuilding(
+            com.quabtun.louji.data.db.BuildingProfileEntity(
+                location = "老城小区",
+                coverPhotoPath = cover.absolutePath,
+                createdAt = 1,
+                updatedAt = 1,
+            ),
+        )
+
+        repositoryA.clearAll()
+
+        assertTrue(repositoryA.allRecords().isEmpty())
+        assertTrue(repositoryA.allBuildings().isEmpty())
+        assertFalse(cover.exists())
     }
 
     private companion object {

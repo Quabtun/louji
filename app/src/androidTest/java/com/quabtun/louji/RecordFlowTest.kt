@@ -103,7 +103,8 @@ class RecordFlowTest {
         compose.onNodeWithTag("filter_ALL").performClick()
         compose.onAllNodesWithText("有媒体").assertCountEquals(0)
         compose.onAllNodesWithText("客户会下楼拿，电梯直达").assertCountEquals(1)
-        compose.onNodeWithText("详细信息").performClick()
+        // The whole card is the single detail affordance; tapping its title opens the detail.
+        compose.onAllNodesWithText("阳光花园 3 栋").onFirst().performClick()
         waitForDetail()
 
         compose.onNodeWithContentDescription("更多").performClick()

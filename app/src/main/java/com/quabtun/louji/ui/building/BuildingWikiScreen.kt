@@ -74,11 +74,9 @@ fun BuildingWikiScreen(
 ) {
     val buildings by viewModel.buildings.collectAsStateWithLifecycle()
     val ranks by viewModel.rankList.collectAsStateWithLifecycle()
-    val filterState = remember { mutableStateOf(BuildingFilter.ALL) }
-    val sortState = remember { mutableStateOf(BuildingSort.ORDERS) }
-    val filter = filterState.value
-    val sort = sortState.value
-    var query by remember { mutableStateOf("") }
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
     var showSortMenu by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newLocation by remember { mutableStateOf("") }
@@ -116,7 +114,7 @@ fun BuildingWikiScreen(
                     item {
                         OutlinedTextField(
                             value = query,
-                            onValueChange = { query = it; viewModel.setQuery(it) },
+                            onValueChange = viewModel::setQuery,
                             modifier = Modifier.fillMaxWidth().testTag("building_search"),
                             placeholder = { Text("搜楼栋名、门禁密码、攻略") },
                             singleLine = true,
@@ -135,17 +133,14 @@ fun BuildingWikiScreen(
                         ) {
                             listOf(
                                 BuildingFilter.ALL to "全部",
-                                BuildingFilter.PINNED to "⭐ 常跑",
+                                BuildingFilter.PINNED to "常跑",
                                 BuildingFilter.STAIRS_ONLY to "纯步梯",
                                 BuildingFilter.HAS_CODE to "有密码",
                                 BuildingFilter.HAS_CARD to "有梯控",
                             ).forEach { (value, label) ->
                                 LouJiFilterChip(
                                     selected = filter == value,
-                                    onClick = {
-                                        filterState.value = value
-                                        viewModel.setFilter(value)
-                                    },
+                                    onClick = { viewModel.setFilter(value) },
                                     label = { Text(label) },
                                 )
                                 Spacer(Modifier.width(8.dp))
@@ -181,7 +176,6 @@ fun BuildingWikiScreen(
                                         DropdownMenuItem(
                                             text = { Text(label) },
                                             onClick = {
-                                                sortState.value = value
                                                 viewModel.setSort(value)
                                                 showSortMenu = false
                                             },
@@ -212,7 +206,7 @@ fun BuildingWikiScreen(
                                 noStairCount = rankMap[profile.location]?.noStairs ?: 0,
                                 onOpen = { onOpenBuilding(profile.location) },
                                 onTogglePin = {
-                                    viewModel.save(profile.copy(pinned = !profile.pinned))
+                                    viewModel.setPinned(profile, !profile.pinned)
                                 },
                             )
                         }

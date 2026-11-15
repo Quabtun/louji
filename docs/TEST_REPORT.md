@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
-日期：2026-11-09
-版本：2.1.0
+日期：2026-11-15
+版本：2.2.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -9,15 +9,15 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 59 / 59 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 51 / 51 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 76 / 76 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 58 / 58 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26/24） | DAO + 迁移（含 5→6）+ 备份加密 各 25 / 25 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
 | 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | v2.1.0 已签名（versionCode 34，47.7MB 含中文模型），已发布 GitHub Release | `apksigner verify` 通过；2.0.1 → 2.1.0 覆盖安装成功 |
+| Release APK | v2.1.0 已签名（versionCode 34）；v2.2.0 通过 `assembleDebug` | `apksigner verify` 通过 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（59）
@@ -308,3 +308,16 @@
 - 模拟器手工走查：分享文字后直达详情（`v2.1-share-auto-save.png`）；关闭自动保存后分享只预填表单；无文字图片回退手动建单并挂订单截图（`v2.1-ocr-fallback.png`）；首页秒存按钮与空剪贴板提示（`v2.1-quick-entry.png`）。
 - 全量结果：JVM 59 / 59，API 35 仪器化 51 / 51，`:app:assembleDebug` 通过。
 - 发布：GitHub Release `v2.1.0`（tag 指向 4ece78f，APK 47,749,474 字节，sha256 `4dace48d…`，签名 `48d7799e…`）；模拟器从 2.0.1 覆盖安装并启动成功。
+
+## 11. v2.2.0 OCR 与数据修复验证补充（2026-11-15）
+
+- `ClipboardOrderParserTest` 新增 6 项：单行带标签文本、`3栋1804`/`B座702`/`2单元501` 无分隔拆分、`12号院3号楼` 不误拆、跨行无冒号标签、`尾 号 ： 4 8 2 1` 空格噪声、`＊/×/•` 掩码与 `#12`/流水号/取货码。
+- `OcrLineComposerTest`（4 项）：同一视觉行按左到右单空格拼接、重叠分块重复行去重、不产生双空格/制表符、不同行保持分离。
+- `OcrTilePlanTest`（5 项）：短图单页、长图重叠分块且覆盖整图、超长图受最大块数限制、空图无块。
+- `AppLockControllerTest` 新增 2 项：解锁后写入无关设置（主题/更新/备份/自动保存）不重锁；从设置开启应用锁保持当前会话解锁、退到后台仍会锁。
+- `BackupManagerTest` 新增 2 项：导出导入恢复 `buildings.json`（门禁/柜点/标签/备注/置顶）与封面图、附件 `ORDER_SCREENSHOT` 分类保留；`clearAll` 同时清空楼栋并删除封面文件。
+- `RecordDaoTest` 新增 2 项：决策统计与楼栋榜按时间区间过滤且排除归档；`PENDING` 筛选与待确认计数只含活跃未决记录。
+- `StatsPeriodTest`：`StatsViewModel` 切到「今日」只统计当天，「全部」含历史但排除归档，排行榜同步。
+- `RecordEditViewModelTest`：无扩展名/无 MIME 的 Photo Picker URI 仍能导入并把首图标记为 `ORDER_SCREENSHOT`；纯白无文字截图 OCR 失败后依然挂图。
+- 手工 UI 走查：1.0× 浅色首页/洞察（`v2.2-home-light.png`、`v2.2-insights-light.png`）、1.3× 引导（`v2.2-home-1.3x.png`）、2.0× 深色首页（`v2.2-home-dark-2x.png`）与表单（`v2.2-edit-2x.png`）；修复引导页标题黑字不可读、首页顶栏 2.0× 裁切、三联工具卡与决策选项换行截断。
+- 全量结果：JVM 76 / 76，API 35 仪器化 58 / 58，Lint 0 error（32 warning），`:app:assembleDebug` 通过。

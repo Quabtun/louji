@@ -23,6 +23,7 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                 container.deleteUndo,
                 container.orderAutoSaver,
                 container.orderTextRecognizer,
+                container.mediaStore,
                 container.settings,
             ) as T
 

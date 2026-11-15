@@ -7,6 +7,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.quabtun.louji.data.DeleteUndoController
+import com.quabtun.louji.data.LocalMediaStore
 import com.quabtun.louji.data.OrderAutoSaver
 import com.quabtun.louji.data.OrderTextRecognizer
 import com.quabtun.louji.data.PendingDelete
@@ -21,6 +22,7 @@ import com.quabtun.louji.model.RecordFilter
 import com.quabtun.louji.model.RecordSort
 import com.quabtun.louji.model.RecordSorter
 import com.quabtun.louji.model.RecordStats
+import com.quabtun.louji.model.MediaDraft
 import com.quabtun.louji.util.ClipboardOrderParser
 import com.quabtun.louji.util.ParsedOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,6 +48,7 @@ class RecordListViewModel(
     private val deleteUndo: DeleteUndoController,
     private val orderAutoSaver: OrderAutoSaver,
     private val recognizer: OrderTextRecognizer,
+    private val mediaStore: LocalMediaStore,
     settings: SettingsStore,
 ) : ViewModel() {
     private val _query = MutableStateFlow("")
@@ -126,6 +129,10 @@ class RecordListViewModel(
 
     val stats: StateFlow<RecordStats> = repository.observeStats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordStats())
+
+    /** Records that still need a climb decision — surfaced as a filter hint on the ledger. */
+    val pendingCount: StateFlow<Int> = repository.observePendingCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     val recentLocations: StateFlow<List<String>> = repository.observeRecentLocations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -250,31 +257,41 @@ class RecordListViewModel(
         if (_quickSaving.value) return
         viewModelScope.launch {
             _quickSaving.value = true
+            // Copy the screenshot and run OCR once; both results are handed to the edit form if
+            // the parse fails, so the external URI is never read twice.
+            val media = runCatching { mediaStore.importFromUri(uri) }.getOrNull()
             try {
-                val text = runCatching { recognizer.recognize(uri) }.getOrDefault("")
-                val parsed: ParsedOrder = if (text.isBlank()) {
+                val ocr = runCatching { recognizer.analyze(uri) }
+                    .getOrElse { com.quabtun.louji.data.OcrResult(errorReason = "无法读取图片文件") }
+                val parsed: ParsedOrder = if (ocr.rawText.isBlank()) {
                     ParsedOrder()
                 } else {
-                    ClipboardOrderParser.parse(text)
+                    ClipboardOrderParser.parse(ocr.rawText)
                 }
                 if (parsed.isEmpty) {
                     _quickEvent.value = QuickSaveEvent.Fallback(
-                        message = "未识别出有效订单信息，已为你打开手动建单",
+                        message = ocr.errorReason
+                            ?.let { "识别未完成：$it，已为你打开手动建单" }
+                            ?: "未识别出有效订单信息，已为你打开手动建单",
                         imageUri = uri,
+                        ocr = ocr,
+                        media = media,
                     )
                     return@launch
                 }
                 val saved = orderAutoSaver.save(
                     parsed = parsed,
-                    screenshotUri = uri,
+                    screenshotUri = if (media == null) uri else null,
                     sourceLabel = "订单截图",
-                    rawText = text,
+                    rawText = ocr.rawText,
+                    preImportedMedia = media,
                 )
                 _quickEvent.value = QuickSaveEvent.Saved(saved.recordId, saved.label())
             } catch (error: Throwable) {
                 _quickEvent.value = QuickSaveEvent.Fallback(
                     message = error.message ?: "识别或保存失败，已为你打开手动建单",
                     imageUri = uri,
+                    media = media,
                 )
             } finally {
                 _quickSaving.value = false
@@ -363,5 +380,7 @@ sealed interface QuickSaveEvent {
         val message: String,
         val text: String? = null,
         val imageUri: Uri? = null,
+        val ocr: com.quabtun.louji.data.OcrResult? = null,
+        val media: MediaDraft? = null,
     ) : QuickSaveEvent
 }

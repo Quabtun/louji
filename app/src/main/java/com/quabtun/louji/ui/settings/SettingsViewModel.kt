@@ -9,6 +9,7 @@ import com.quabtun.louji.data.ImportMode
 import com.quabtun.louji.data.LocalMediaStore
 import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.ThemeMode
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,30 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _duplicates = MutableStateFlow<List<List<RecordWithAttachments>>?>(null)
     val duplicates: StateFlow<List<List<RecordWithAttachments>>?> = _duplicates.asStateFlow()
+
+    /** Running export/import, so the progress sheet can offer cancel. */
+    private var backupJob: Job? = null
+
+    fun cancelBackup() {
+        backupJob?.cancel()
+        backupJob = null
+        _backup.value = BackupUiState(message = "已取消", isError = true)
+    }
+
+    /** Removes media files no record or building cover references any more. */
+    fun cleanOrphans() {
+        viewModelScope.launch {
+            val removed = runCatching {
+                val before = container.mediaStore.storageUsage().itemCount
+                container.mediaStore.sweepOrphans(container.repository.referencedMediaPaths())
+                before - container.mediaStore.storageUsage().itemCount
+            }.getOrDefault(0)
+            refreshStorage()
+            _backup.value = BackupUiState(
+                message = if (removed > 0) "已清理 $removed 个无引用文件" else "没有需要清理的文件",
+            )
+        }
+    }
 
     init {
         refreshStorage()
@@ -67,7 +92,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun export(uri: Uri, password: String?) {
-        viewModelScope.launch {
+        backupJob = viewModelScope.launch {
             _backup.value = BackupUiState(running = true, progress = 0f)
             try {
                 val manifest = container.backup.exportBackup(uri, password) { done, total ->
@@ -85,6 +110,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 )
                 container.settings.setLastBackupAt(System.currentTimeMillis())
                 refreshStorage()
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
             } catch (error: Throwable) {
                 _backup.value = BackupUiState(
                     message = error.message ?: "导出失败",
@@ -95,7 +122,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun import(uri: Uri, mode: ImportMode, password: String? = null) {
-        viewModelScope.launch {
+        backupJob = viewModelScope.launch {
             _backup.value = BackupUiState(running = true, progress = 0f)
             try {
                 val summary = container.backup.importBackup(uri, mode, password) { done, total ->
@@ -113,6 +140,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     "imported=${summary.imported} skipped=${summary.skipped} media=${summary.media}",
                 )
                 refreshStorage()
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
             } catch (error: Throwable) {
                 _backup.value = BackupUiState(
                     message = error.message ?: "导入失败",

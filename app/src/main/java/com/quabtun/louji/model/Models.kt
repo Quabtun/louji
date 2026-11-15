@@ -49,6 +49,7 @@ enum class RecordFilter {
     NO_STAIRS,
     WILL_COME_DOWN,
     WARNING,
+    PENDING,
 }
 
 object PersonalityTags {

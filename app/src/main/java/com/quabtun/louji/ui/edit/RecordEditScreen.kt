@@ -12,6 +12,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -69,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -121,6 +124,7 @@ fun RecordEditScreen(
     autoPaste: Boolean,
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
+    onOpenAnnotate: (Long) -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val recentLocations by viewModel.recentLocations.collectAsStateWithLifecycle()
@@ -141,6 +145,7 @@ fun RecordEditScreen(
     var showCategorySheetFor by remember { mutableStateOf<Long?>(null) }
     var showPendingCategoryFor by remember { mutableStateOf<Int?>(null) }
     var voiceFailed by remember { mutableStateOf(false) }
+    var annotatingPending by remember { mutableStateOf<com.quabtun.louji.model.MediaDraft?>(null) }
     val formScrollState = rememberScrollState()
     var autoPasted by remember { mutableStateOf(false) }
 
@@ -160,6 +165,9 @@ fun RecordEditScreen(
         try {
             when (val result = LocationHelper.currentPlace(context)) {
                 is LocationHelper.Result.Success -> viewModel.setLocation(result.place)
+                is LocationHelper.Result.CoordinatesOnly -> snackbar.showSnackbar(
+                    "暂未获取到中文地名，请手动输入或选常用位置（坐标参考 ${result.label}）",
+                )
                 LocationHelper.Result.PermissionMissing ->
                     snackbar.showSnackbar("没有定位权限，手动填写位置即可")
                 LocationHelper.Result.LocationDisabled ->
@@ -247,15 +255,36 @@ fun RecordEditScreen(
         }
     }
 
-    LaunchedEffect(autoPaste) {
+    LaunchedEffect(autoPaste, ui.initialized) {
         if (autoPaste && !autoPasted && ui.initialized) {
             autoPasted = true
             pasteOrder()
         }
     }
 
-    if (showCamera) {
-        CameraCaptureScreen(
+    // Annotate a not-yet-saved draft in place; the annotated image replaces the draft and keeps
+    // its category (e.g. ORDER_SCREENSHOT) without touching the database.
+    annotatingPending?.let { draft ->
+        val container = (context.applicationContext as com.quabtun.louji.LouJiApp).container
+        val annotationFactory = remember(container) {
+            com.quabtun.louji.ui.AppViewModelFactory(container)
+        }
+        val annotationViewModel: com.quabtun.louji.ui.media.AnnotationViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel(factory = annotationFactory)
+        com.quabtun.louji.ui.media.ImageAnnotationScreen(
+            viewModel = annotationViewModel,
+            attachmentId = -1L,
+            onClose = { annotatingPending = null },
+            pendingSource = draft,
+            onPendingAnnotated = { annotated ->
+                viewModel.replacePending(draft, annotated)
+                annotatingPending = null
+            },
+        )
+        return
+    }
+
+    if (showCamera) {        CameraCaptureScreen(
             mediaStore = mediaStore,
             initialVideo = cameraVideo,
             onClose = { showCamera = false },
@@ -403,6 +432,15 @@ fun RecordEditScreen(
                     RecognitionSummary(fields = ui.recognizedFields, draft = ui.draft)
                 }
 
+                if (ui.ocrLines.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    OcrLinePicker(
+                        lines = ui.ocrLines,
+                        onPick = viewModel::applyOcrLine,
+                        onDismiss = viewModel::clearOcrLines,
+                    )
+                }
+
                 if (buildingMatch != null && ui.draft.location.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
                     val profile = buildingMatch!!
@@ -411,6 +449,15 @@ fun RecordEditScreen(
                             append("已有该楼栋攻略：")
                             append(profile.elevatorType.elevatorLabel())
                             if (profile.accessCode.isNotBlank()) append(" · 门禁 #${profile.accessCode}")
+                            if (profile.lockerInfo.isNotBlank()) {
+                                append(" · 柜点 ${profile.lockerInfo.take(20)}")
+                            }
+                            if (profile.accessTags.isNotEmpty()) {
+                                append(" · ").append(profile.accessTags.take(3).joinToString("/"))
+                            }
+                            if (profile.notes.isNotBlank()) {
+                                append(" · ").append(profile.notes.take(24))
+                            }
                         },
                         actionLabel = "一键带入",
                         onAction = { viewModel.applyBuilding(profile) },
@@ -443,8 +490,8 @@ fun RecordEditScreen(
                 FormCard(title = "爬楼决策") {
                     TileSegmentedSelector(
                         options = listOf(
-                            TriState.YES to "不用爬楼",
-                            TriState.NO to "要爬楼",
+                            TriState.YES to "免爬",
+                            TriState.NO to "要爬",
                             TriState.UNKNOWN to "待确认",
                         ),
                         selected = ui.draft.noStairs,
@@ -495,7 +542,6 @@ fun RecordEditScreen(
 
                 Spacer(Modifier.height(16.dp))
                 // ---- Card 2: place + access ----
-                val highlightMissing = ui.recognizedFields.isNotEmpty()
                 FormCard(title = "位置、楼层与门禁") {
                     OutlinedTextField(
                         value = ui.draft.location,
@@ -503,8 +549,7 @@ fun RecordEditScreen(
                         modifier = Modifier.fillMaxWidth().testTag("field_location"),
                         label = { Text("位置 *") },
                         placeholder = { Text("小区 / 楼栋，如 阳光花园 3 栋") },
-                        isError = ui.errors.location != null ||
-                            (highlightMissing && ui.draft.location.isBlank()),
+                        isError = ui.errors.location != null,
                         supportingText = ui.errors.location?.let { { Text(it) } },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
@@ -565,7 +610,6 @@ fun RecordEditScreen(
                             onValueChange = viewModel::setFloor,
                             modifier = Modifier.weight(1f).testTag("field_floor"),
                             label = { Text("楼层") },
-                            isError = highlightMissing && ui.draft.floor.isBlank(),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
@@ -574,7 +618,6 @@ fun RecordEditScreen(
                             onValueChange = viewModel::setRoomNo,
                             modifier = Modifier.weight(1.4f).testTag("field_room"),
                             label = { Text("房号") },
-                            isError = highlightMissing && ui.draft.roomNo.isBlank(),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                         )
@@ -813,43 +856,52 @@ fun RecordEditScreen(
                             ui.existingMedia.forEach { attachment ->
                                 if (attachment.id in ui.removedMediaIds) return@forEach
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Box {
-                                        MediaTile(
-                                            type = attachment.type,
-                                            filePath = attachment.filePath,
-                                            thumbPath = attachment.thumbPath,
-                                            durationMs = attachment.durationMs,
-                                            onRemove = { viewModel.removeExisting(attachment.id) },
-                                        )
-                                        if (attachment.type == com.quabtun.louji.model.MediaType.IMAGE) {
-                                            IconButton(
-                                                onClick = {
-                                                    showCategorySheetFor = attachment.id
-                                                },
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomStart)
-                                                    .size(30.dp)
-                                                    .background(
-                                                        androidx.compose.ui.graphics.Color.Black
-                                                            .copy(alpha = 0.55f),
-                                                        RoundedCornerShape(15.dp),
-                                                    ),
+                                    MediaTile(
+                                        type = attachment.type,
+                                        filePath = attachment.filePath,
+                                        thumbPath = attachment.thumbPath,
+                                        durationMs = attachment.durationMs,
+                                        onRemove = { viewModel.removeExisting(attachment.id) },
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    // 48dp text buttons keep the two actions separate and tappable,
+                                    // instead of two tiny overlays fighting for the same thumbnail.
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (attachment.type ==
+                                            com.quabtun.louji.model.MediaType.IMAGE
+                                        ) {
+                                            TextButton(
+                                                onClick = { onOpenAnnotate(attachment.id) },
+                                                modifier = Modifier.testTag(
+                                                    "annotate_${attachment.id}",
+                                                ),
+                                                contentPadding = PaddingValues(horizontal = 6.dp),
                                             ) {
                                                 Icon(
-                                                    Icons.Filled.Create,
-                                                    contentDescription = "标注",
-                                                    tint = androidx.compose.ui.graphics.Color.White,
-                                                    modifier = Modifier.size(16.dp),
+                                                    painter = painterResource(R.drawable.ic_brush),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp),
                                                 )
+                                                Spacer(Modifier.width(2.dp))
+                                                Text("标注", style = MaterialTheme.typography.labelSmall)
                                             }
                                         }
+                                        TextButton(
+                                            onClick = { showCategorySheetFor = attachment.id },
+                                            contentPadding = PaddingValues(horizontal = 6.dp),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_tag),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                text = attachment.category.categoryLabel(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
                                     }
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = attachment.category.categoryLabel(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
                                 }
                             }
                         }
@@ -871,14 +923,42 @@ fun RecordEditScreen(
                                         onRemove = { viewModel.removePending(media) },
                                     )
                                     Spacer(Modifier.height(4.dp))
-                                    TextButton(
-                                        onClick = { showPendingCategoryFor = index },
-                                        contentPadding = PaddingValues(2.dp),
-                                    ) {
-                                        Text(
-                                            text = media.category.categoryLabel(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (media.type ==
+                                            com.quabtun.louji.model.MediaType.IMAGE
+                                        ) {
+                                            TextButton(
+                                                onClick = { annotatingPending = media },
+                                                modifier = Modifier.testTag(
+                                                    "pending_annotate_$index",
+                                                ),
+                                                contentPadding = PaddingValues(horizontal = 6.dp),
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_brush),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                                Spacer(Modifier.width(2.dp))
+                                                Text("标注", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                        TextButton(
+                                            onClick = { showPendingCategoryFor = index },
+                                            contentPadding = PaddingValues(horizontal = 6.dp),
+                                            modifier = Modifier.testTag("pending_category_$index"),
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_tag),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                text = media.category.categoryLabel(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1025,12 +1105,13 @@ private fun ToolTile(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(78.dp),
+        // min height instead of a fixed one, so 2.0× font can wrap instead of clipping.
+        modifier = modifier.heightIn(min = 68.dp),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -1045,14 +1126,15 @@ private fun ToolTile(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Text(
                 text = caption,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }
@@ -1119,8 +1201,7 @@ private fun climbNotePlaceholder(noStairs: TriState): String = when (noStairs) {
     TriState.UNKNOWN -> "先去楼下看看，回来再补"
 }
 
-/** "已提取：位置 · 房号 · 尾号" plus a red reminder for required fields the parse missed. */
-@Composable
+/** "已提取：位置 · 房号 · 尾号" plus a red reminder for required fields the parse missed. */@Composable
 private fun RecognitionSummary(fields: List<String>, draft: RecordDraft) {
     val status = LocalLouJiStatusColors.current
     val missing = buildList {
@@ -1180,5 +1261,100 @@ private fun RecognitionSummary(fields: List<String>, draft: RecordDraft) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Shows the raw OCR rows when the parser could not recognise order fields, so the rider can tap a
+ * row and copy it into the field it belongs to instead of retyping the screenshot by hand.
+ */
+@Composable
+private fun OcrLinePicker(
+    lines: List<String>,
+    onPick: (String, OcrField) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by remember { mutableStateOf<String?>(null) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("ocr_line_picker"),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_gallery),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "OCR 识别原文",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("收起") }
+            }
+            Text(
+                text = "点一行，选择要填入的字段",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            lines.take(12).forEach { line ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { selected = line },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                ) {
+                    Text(
+                        text = line,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+
+    selected?.let { line ->
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            title = { Text("填入哪个字段？") },
+            text = {
+                Column {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OcrField.entries.forEach { field ->
+                        TextButton(
+                            onClick = {
+                                onPick(line, field)
+                                selected = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(field.label, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { selected = null }) { Text("取消") } },
+        )
     }
 }

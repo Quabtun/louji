@@ -32,5 +32,5 @@ class AppContainer(private val context: Context) {
     val deleteUndo = DeleteUndoController()
     val diagnostics = DiagnosticLog(context)
     val shareIntake = ShareIntake()
-    val orderTextRecognizer = OrderTextRecognizer(context)
+    val orderTextRecognizer = OrderTextRecognizer(context, diagnostics)
 }

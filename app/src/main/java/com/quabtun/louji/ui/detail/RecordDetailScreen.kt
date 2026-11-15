@@ -6,6 +6,13 @@
 
 package com.quabtun.louji.ui.detail
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
@@ -104,12 +112,14 @@ fun RecordDetailScreen(
     onDuplicate: (Long) -> Unit,
     onArchive: (Boolean) -> Unit,
     onOpenMedia: (Long, Int) -> Unit,
+    onOpenMediaScreen: (Long) -> Unit = {},
     onOpenBuilding: (String) -> Unit,
     onOpenAnnotate: (Long) -> Unit,
 ) {
     val record by viewModel.record.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -394,6 +404,65 @@ fun RecordDetailScreen(
                             label = "分机号",
                             value = item.record.phoneExt.ifBlank { "未填写" },
                         )
+                        if (item.record.phoneTail.isNotBlank() ||
+                            item.record.phoneExt.isNotBlank()
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val reference = buildString {
+                                            if (item.record.phoneTail.isNotBlank()) {
+                                                append("尾号 ").append(item.record.phoneTail)
+                                            }
+                                            if (item.record.phoneExt.isNotBlank()) {
+                                                if (isNotEmpty()) append(" ")
+                                                append("分机 ").append(item.record.phoneExt)
+                                            }
+                                        }
+                                        copyToClipboard(context, reference)
+                                        Toast.makeText(
+                                            context,
+                                            "已复制：$reference",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                    modifier = Modifier.testTag("detail_copy_phone"),
+                                    shape = RoundedCornerShape(10.dp),
+                                ) { Text("复制号码") }
+                                OutlinedButton(
+                                    onClick = {
+                                        val reference = buildString {
+                                            if (item.record.phoneTail.isNotBlank()) {
+                                                append("尾号 ").append(item.record.phoneTail)
+                                            }
+                                            if (item.record.phoneExt.isNotBlank()) {
+                                                if (isNotEmpty()) append(" ")
+                                                append("分机 ").append(item.record.phoneExt)
+                                            }
+                                        }
+                                        copyToClipboard(context, reference)
+                                        val dial = Intent(
+                                            Intent.ACTION_DIAL,
+                                            Uri.parse(
+                                                if (item.record.phoneExt.length >= 5) {
+                                                    "tel:${item.record.phoneExt}"
+                                                } else {
+                                                    "tel:"
+                                                },
+                                            ),
+                                        )
+                                        runCatching { context.startActivity(dial) }
+                                        Toast.makeText(
+                                            context,
+                                            "号码已复制，请在拨号盘粘贴分机",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                    modifier = Modifier.testTag("detail_dial"),
+                                    shape = RoundedCornerShape(10.dp),
+                                ) { Text("去拨号") }
+                            }
+                        }
 
                         Spacer(Modifier.height(20.dp))
                         SectionHeader("客户")
@@ -403,7 +472,11 @@ fun RecordDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             SemanticPill(
-                                text = if (item.record.willComeDown == TriState.YES) "会下楼" else "不会下楼",
+                                text = when (item.record.willComeDown) {
+                                    TriState.YES -> "会下楼"
+                                    TriState.NO -> "不会下楼"
+                                    TriState.UNKNOWN -> "下楼未知"
+                                },
                                 tone = if (item.record.willComeDown == TriState.YES) {
                                     PillTone.PASS
                                 } else {
@@ -449,6 +522,22 @@ fun RecordDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
+                            OutlinedButton(
+                                onClick = { onOpenMediaScreen(item.record.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("detail_media_gallery"),
+                                shape = RoundedCornerShape(10.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_gallery),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("汇总查看全部 ${item.attachments.size} 个现场附件")
+                            }
+                            Spacer(Modifier.height(10.dp))
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -649,8 +738,21 @@ private fun RecordWithAttachments.desensitisedShareText(): String {
         appendLine("【楼记】${record.location}")
         if (record.floor.isNotBlank()) appendLine("楼层：${record.floor}")
         if (record.accessCode.isNotBlank()) appendLine("门禁：${record.accessCode}")
-        appendLine("爬楼：${if (record.noStairs == TriState.YES) "免爬" else "要爬"}")
+        appendLine(
+            "爬楼：" + when (record.noStairs) {
+                TriState.YES -> "免爬"
+                TriState.NO -> "要爬"
+                TriState.UNKNOWN -> "待确认"
+            },
+        )
         if (record.climbNote.isNotBlank()) appendLine("说明：${record.climbNote}")
         appendLine("（已隐去订单号、手机尾号与房号）")
     }.trim()
+}
+
+private fun copyToClipboard(context: Context, value: String) {
+    runCatching {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText("louji", value))
+    }
 }

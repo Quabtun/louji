@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,13 +43,18 @@ fun OnboardingScreen(onStart: () -> Unit) {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { /* 拒绝也不阻塞，权限在用到时仍会再次引导 */ }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .testTag("onboarding_screen"),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .testTag("onboarding_screen"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 760.dp)
@@ -59,7 +65,7 @@ fun OnboardingScreen(onStart: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .background(Color(0xFF121517), RoundedCornerShape(13.dp)),
+                        .background(Color(0xFF141923), RoundedCornerShape(13.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
@@ -145,6 +151,7 @@ fun OnboardingScreen(onStart: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
     }
 }
 

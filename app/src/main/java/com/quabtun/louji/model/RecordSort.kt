@@ -11,15 +11,19 @@ enum class RecordSort {
 object RecordSorter {
     fun sort(items: List<RecordWithAttachments>, sort: RecordSort): List<RecordWithAttachments> =
         when (sort) {
-            RecordSort.UPDATED -> items.sortedByDescending { it.record.createdAt }
+            // "最近更新" means the record was last touched, matching the DAO paging order.
+            RecordSort.UPDATED -> items.sortedWith(
+                compareByDescending<RecordWithAttachments> { it.record.updatedAt }
+                    .thenByDescending { it.record.id },
+            )
             RecordSort.FLOOR -> items.sortedWith(
                 compareBy<RecordWithAttachments> { floorKey(it.record.floor).first }
                     .thenBy { floorKey(it.record.floor).second }
-                    .thenBy { it.record.createdAt },
+                    .thenByDescending { it.record.updatedAt },
             )
             RecordSort.LOCATION -> items.sortedWith(
                 compareBy<RecordWithAttachments> { it.record.location.lowercase() }
-                    .thenByDescending { it.record.createdAt },
+                    .thenByDescending { it.record.updatedAt },
             )
         }
 

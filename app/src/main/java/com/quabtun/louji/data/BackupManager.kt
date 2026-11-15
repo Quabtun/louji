@@ -24,6 +24,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -63,6 +64,16 @@ class BackupManager(
         }
         val mediaCount = prepared.sumOf { it.files.size }
         val buildings = repository.allBuildings()
+        // Cover photos travel inside the zip as `covers/<index>.<ext>`; an absolute device path
+        // would be meaningless on the restoring phone.
+        val preparedBuildings = buildings.mapIndexed { index, profile ->
+            val source = profile.coverPhotoPath
+                ?.let { File(it) }
+                ?.takeIf { it.isFile }
+            val entry = source?.let { "covers/$index.${extensionOf(it)}" }
+            PreparedBuilding(profile.toBackupBuilding(entry), source, entry)
+        }
+        val coverCount = preparedBuildings.count { it.source != null }
         val manifest = BackupManifest(
             exportedAt = clock(),
             appVersion = BuildConfig.VERSION_NAME,
@@ -72,17 +83,25 @@ class BackupManager(
         )
 
         if (password.isNullOrBlank()) {
-            exportPlain(uri, prepared, buildings, manifest, mediaCount, onProgress)
+            exportPlain(uri, prepared, preparedBuildings, manifest, mediaCount, onProgress)
         } else {
-            exportEncrypted(uri, prepared, buildings, manifest, mediaCount, password, onProgress)
+            exportEncrypted(
+                uri,
+                prepared,
+                preparedBuildings,
+                manifest,
+                mediaCount,
+                password,
+                onProgress,
+            )
         }
         manifest
     }
 
-    private fun exportPlain(
+    private suspend fun exportPlain(
         uri: Uri,
         prepared: List<PreparedRecord>,
-        buildings: List<com.quabtun.louji.data.db.BuildingProfileEntity>,
+        buildings: List<PreparedBuilding>,
         manifest: BackupManifest,
         mediaCount: Int,
         onProgress: (Int, Int) -> Unit,
@@ -97,11 +116,18 @@ class BackupManager(
                 )
                 zip.putJsonEntry(
                     "buildings.json",
-                    json.encodeToString(buildings.map { it.toBackupBuilding() }),
+                    json.encodeToString(buildings.map { it.backup }),
                 )
+                buildings.forEach { building ->
+                    val source = building.source ?: return@forEach
+                    zip.putNextEntry(ZipEntry(building.entryName!!))
+                    source.inputStream().use { input -> input.copyTo(zip) }
+                    zip.closeEntry()
+                }
                 var done = 0
                 for (record in prepared) {
                     for (file in record.files) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         zip.putNextEntry(ZipEntry(file.entryName))
                         file.source.inputStream().use { input -> input.copyTo(zip) }
                         zip.closeEntry()
@@ -116,10 +142,10 @@ class BackupManager(
         }
     }
 
-    private fun exportEncrypted(
+    private suspend fun exportEncrypted(
         uri: Uri,
         prepared: List<PreparedRecord>,
-        buildings: List<com.quabtun.louji.data.db.BuildingProfileEntity>,
+        buildings: List<PreparedBuilding>,
         manifest: BackupManifest,
         mediaCount: Int,
         password: String,
@@ -141,13 +167,20 @@ class BackupManager(
                 )
                 zip.addStream(
                     ByteArrayInputStream(
-                        json.encodeToString(buildings.map { it.toBackupBuilding() }).toByteArray(),
+                        json.encodeToString(buildings.map { it.backup }).toByteArray(),
                     ),
                     encryptedParams("buildings.json"),
                 )
+                buildings.forEach { building ->
+                    val source = building.source ?: return@forEach
+                    source.inputStream().use {
+                        zip.addStream(it, encryptedParams(building.entryName!!))
+                    }
+                }
                 var done = 0
                 for (record in prepared) {
                     for (file in record.files) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
                         file.source.inputStream().use {
                             zip.addStream(it, encryptedParams(file.entryName))
                         }
@@ -231,6 +264,15 @@ class BackupManager(
         }
         val records = readJson<List<BackupRecord>>(File(temp, "records.json"))
         if (records.size > MAX_RECORDS) throw BackupException("备份中的记录过多")
+        // Older backups (schema 1) have no buildings.json; that is expected and non-fatal.
+        val buildingsFile = File(temp, "buildings.json")
+        val backupBuildings = if (buildingsFile.isFile) {
+            readJson<List<BackupBuilding>>(buildingsFile).also {
+                if (it.size > MAX_BUILDINGS) throw BackupException("备份中的楼栋过多")
+            }
+        } else {
+            emptyList()
+        }
 
         val prepared = mutableListOf<PreparedImport>()
         val seenKeys = HashSet<Triple<String, String, Long>>()
@@ -274,9 +316,18 @@ class BackupManager(
             )
         }
 
+        val copiedCovers = mutableListOf<File>()
+        val importedBuildings = try {
+            restoreBuildings(temp, backupBuildings, copiedCovers)
+        } catch (error: Throwable) {
+            copiedCovers.forEach { it.delete() }
+            throw error
+        }
+
         val copiedMedia = mutableListOf<MediaDraft>()
         val withMedia = try {
             prepared.map { item ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 item.copy(
                     media = item.sourceAttachments.mapNotNull { (attachment, source) ->
                         val type = runCatching { MediaType.valueOf(attachment.type) }
@@ -311,6 +362,7 @@ class BackupManager(
             }
         } catch (error: Throwable) {
             copiedMedia.forEach { mediaStore.deleteDraft(it) }
+            copiedCovers.forEach { it.delete() }
             throw error
         }
 
@@ -321,7 +373,22 @@ class BackupManager(
             )
         } catch (error: Throwable) {
             copiedMedia.forEach { mediaStore.deleteDraft(it) }
+            copiedCovers.forEach { it.delete() }
             throw error
+        }
+        if (importedBuildings.isNotEmpty()) {
+            try {
+                repository.importBuildings(
+                    importedBuildings,
+                    replaceAll = mode == ImportMode.OVERWRITE,
+                )
+            } catch (error: Throwable) {
+                copiedCovers.forEach { it.delete() }
+                throw error
+            }
+        } else if (mode == ImportMode.OVERWRITE && backupBuildings.isEmpty()) {
+            // Full restore without a buildings.json must not leave stale building profiles.
+            runCatching { repository.importBuildings(emptyList(), replaceAll = true) }
         }
         val mediaCount = withMedia.sumOf { it.media.size }
         // The import is committed at this point. Cleanup or progress callbacks must never
@@ -396,7 +463,8 @@ class BackupManager(
                     val name = header.fileName.replace('\\', '/')
                     if (header.isDirectory) continue
                     val allowed = name == "manifest.json" || name == "records.json" ||
-                        name == "buildings.json" || name.startsWith("media/")
+                        name == "buildings.json" || name.startsWith("media/") ||
+                        name.startsWith("covers/")
                     if (!allowed || name.startsWith("/") ||
                         name.split('/').any { it == ".." } || name.contains('\u0000')
                     ) {
@@ -465,7 +533,8 @@ class BackupManager(
                         continue
                     }
                     val allowed = name == "manifest.json" || name == "records.json" ||
-                        name == "buildings.json" || name.startsWith("media/")
+                        name == "buildings.json" || name.startsWith("media/") ||
+                        name.startsWith("covers/")
                     if (!allowed || name.startsWith("/") || name.split('/').any { it == ".." } ||
                         name.contains('\u0000')
                     ) {
@@ -584,21 +653,22 @@ class BackupManager(
         },
     )
 
-    private fun com.quabtun.louji.data.db.BuildingProfileEntity.toBackupBuilding() =
-        BackupBuilding(
-            location = location,
-            elevatorType = elevatorType.name,
-            accessCode = accessCode,
-            doorIntact = doorIntact.name,
-            canOpenFromAbove = canOpenFromAbove.name,
-            lockerInfo = lockerInfo,
-            accessTags = accessTags,
-            notes = notes,
-            coverPhotoPath = coverPhotoPath,
-            pinned = pinned,
-            createdAt = createdAt,
-            updatedAt = updatedAt,
-        )
+    private fun com.quabtun.louji.data.db.BuildingProfileEntity.toBackupBuilding(
+        coverEntry: String?,
+    ) = BackupBuilding(
+        location = location,
+        elevatorType = elevatorType.name,
+        accessCode = accessCode,
+        doorIntact = doorIntact.name,
+        canOpenFromAbove = canOpenFromAbove.name,
+        lockerInfo = lockerInfo,
+        accessTags = accessTags,
+        notes = notes,
+        coverPhotoPath = coverEntry,
+        pinned = pinned,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
 
     private fun PreparedImport.toEntity(now: Long): RecordEntity = RecordEntity(
         location = backup.location,
@@ -656,6 +726,12 @@ class BackupManager(
         val files: List<PreparedFile>,
     )
 
+    private data class PreparedBuilding(
+        val backup: BackupBuilding,
+        val source: File?,
+        val entryName: String?,
+    )
+
     private fun BackupBuilding.toEntity(): com.quabtun.louji.data.db.BuildingProfileEntity =
         com.quabtun.louji.data.db.BuildingProfileEntity(
             location = location.trim().take(120),
@@ -670,11 +746,55 @@ class BackupManager(
             lockerInfo = lockerInfo.take(200),
             accessTags = accessTags.take(8).map { it.take(20) },
             notes = notes.take(500),
-            coverPhotoPath = coverPhotoPath?.takeIf { it.startsWith("/") },
+            // Cover photos are restored separately, from inside the backup zip only.
+            coverPhotoPath = null,
             pinned = pinned,
             createdAt = createdAt.takeIf { it > 0 } ?: clock(),
             updatedAt = updatedAt.takeIf { it > 0 } ?: clock(),
         )
+
+    /** Copies cover images from the backup zip into app-private media and rewrites each path. */
+    private fun restoreBuildings(
+        temp: File,
+        backupBuildings: List<BackupBuilding>,
+        copied: MutableList<File>,
+    ): List<com.quabtun.louji.data.db.BuildingProfileEntity> {
+        if (backupBuildings.isEmpty()) return emptyList()
+        val root = temp.canonicalPath + File.separator
+        return backupBuildings.mapNotNull { backup ->
+            val location = backup.location.trim().take(120)
+            if (location.isBlank()) return@mapNotNull null
+            val entry = backup.coverPhotoPath?.replace('\\', '/')
+            val cover = if (entry != null && entry.startsWith("covers/")) {
+                val source = File(temp, entry).canonicalFile
+                if (!source.isFile || !source.path.startsWith(root)) {
+                    null
+                } else {
+                    val mime = mimeFor(source, MediaType.IMAGE)
+                    val target = File(
+                        mediaStore.mediaDirectory(),
+                        "${UUID.randomUUID()}.${extensionForMime(mime, source)}",
+                    )
+                    val copiedOk = runCatching {
+                        source.inputStream().use { input ->
+                            target.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        target.length() > 0L
+                    }.getOrDefault(false)
+                    if (copiedOk) {
+                        copied += target
+                        target
+                    } else {
+                        target.delete()
+                        null
+                    }
+                }
+            } else {
+                null
+            }
+            backup.copy(location = location).toEntity().copy(coverPhotoPath = cover?.absolutePath)
+        }
+    }
 
     private data class PreparedImport(
         val backup: BackupRecord,

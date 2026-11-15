@@ -43,14 +43,16 @@ class OrderAutoSaver(
         screenshotUri: Uri? = null,
         sourceLabel: String,
         rawText: String? = null,
+        preImportedMedia: MediaDraft? = null,
     ): Saved = withContext(Dispatchers.IO) {
         val location = resolveLocation(parsed, rawText)
-        val building = if (location == UNKNOWN_LOCATION) {
+        val unresolved = location == UNKNOWN_LOCATION
+        val building = if (unresolved) {
             null
         } else {
             repository.findBuildingMatch(location)
         }
-        val warningAtBuilding = if (location == UNKNOWN_LOCATION) {
+        val warningAtBuilding = if (unresolved) {
             false
         } else {
             runCatching {
@@ -80,7 +82,16 @@ class OrderAutoSaver(
             } else {
                 TriState.UNKNOWN
             },
-            remark = parsed.remarkHint.orEmpty().trim(),
+            remark = parsed.remarkHint.orEmpty().trim().ifBlank {
+                // Surface the building's fixed access hints when the order text has none.
+                building?.let { profile ->
+                    buildList {
+                        if (profile.lockerInfo.isNotBlank()) add("柜点 ${profile.lockerInfo.take(20)}")
+                        profile.accessTags.take(3).forEach { add(it) }
+                        if (profile.notes.isNotBlank()) add(profile.notes.take(24))
+                    }.joinToString(" · ").take(300)
+                }.orEmpty()
+            },
             phoneExt = parsed.phoneExt.orEmpty().trim(),
             accessCode = building?.accessCode.orEmpty().trim(),
             elevatorType = building?.elevatorType ?: ElevatorType.UNKNOWN,
@@ -88,9 +99,12 @@ class OrderAutoSaver(
         )
 
         var media: MediaDraft? = null
+        val owned = preImportedMedia == null
         try {
-            if (screenshotUri != null) {
-                media = mediaStore.importFromUri(screenshotUri).copy(
+            media = preImportedMedia?.copy(
+                category = AttachmentCategory.ORDER_SCREENSHOT,
+            ) ?: screenshotUri?.let {
+                mediaStore.importFromUri(it).copy(
                     category = AttachmentCategory.ORDER_SCREENSHOT,
                 )
             }
@@ -103,21 +117,38 @@ class OrderAutoSaver(
             )
             Saved(recordId = id, draft = draft, sourceLabel = sourceLabel)
         } catch (error: Throwable) {
-            media?.let(mediaStore::deleteDraft)
+            if (owned) media?.let(mediaStore::deleteDraft)
             throw error
         }
     }
 
+    /**
+     * Only accepts a parsed location or a raw line that actually looks like an address. The first
+     * line of a screenshot is routinely "美团外卖" or an order number, so it is never used blindly;
+     * without a location the record is saved as [UNKNOWN_LOCATION] for the rider to finish.
+     */
     private fun resolveLocation(parsed: ParsedOrder, rawText: String?): String {
         parsed.location?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.take(60) }
         rawText?.lineSequence()
             ?.map { it.trim() }
-            ?.firstOrNull { it.isNotEmpty() }
+            ?.filter { it.isNotEmpty() }
+            ?.firstOrNull { line ->
+                line.length in 2..60 &&
+                    ADDRESS_HINT.containsMatchIn(line) &&
+                    !NON_ADDRESS_LINE.containsMatchIn(line)
+            }
             ?.let { return it.take(60) }
         return UNKNOWN_LOCATION
     }
 
     companion object {
         const val UNKNOWN_LOCATION = "未知楼栋-待确认"
+
+        private val ADDRESS_HINT = Regex(
+            "小区|花园|公寓|大厦|苑|号楼|栋|单元|路|街|道|巷|广场|城|村|居|府|公馆",
+        )
+        private val NON_ADDRESS_LINE = Regex(
+            "^(美团|饿了么|闪送|达达|顺丰|京东|订单|流水|取货|取餐|尾号|备注|#|￥|¥|\\d+$)",
+        )
     }
 }

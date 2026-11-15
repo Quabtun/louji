@@ -21,15 +21,31 @@ class AppLockController(
     private val _state = MutableStateFlow(AppLockState())
     val state: StateFlow<AppLockState> = _state.asStateFlow()
 
+    /** Last known feature switch, so unrelated settings writes cannot re-lock the session. */
+    private var knownEnabled: Boolean? = null
+
     init {
         scope.launch {
             settings.collect { value ->
-                _state.update {
-                    it.copy(
-                        ready = true,
-                        enabled = value.appLockEnabled,
-                        locked = value.appLockEnabled,
-                    )
+                val enabled = value.appLockEnabled
+                val previous = knownEnabled
+                knownEnabled = enabled
+                _state.update { state ->
+                    when {
+                        // First emission: adopt the stored switch and lock if it is on.
+                        previous == null -> state.copy(
+                            ready = true,
+                            enabled = enabled,
+                            locked = enabled,
+                        )
+                        // Turning the feature off releases any lock immediately.
+                        !enabled -> state.copy(enabled = false, locked = false)
+                        // Turning it on from Settings happens behind a device-credential prompt;
+                        // the rider is already verified, so do not lock the screen they are on.
+                        previous == false -> state.copy(enabled = true)
+                        // Same switch value: theme/update/backup writes must not change the lock.
+                        else -> state.copy(enabled = true)
+                    }
                 }
             }
         }

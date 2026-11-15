@@ -40,13 +40,17 @@ object CsvExporter {
             val row = listOf(
                 formatter.format(Date(r.createdAt)),
                 r.location,
-                if (desensitised) "***" else r.orderNo,
+                when {
+                    r.orderNo.isBlank() -> ""
+                    desensitised -> "***"
+                    else -> r.orderNo
+                },
                 r.gender.label(),
                 tail,
-                r.phoneExt,
+                if (desensitised && r.phoneExt.isNotBlank()) "***" else r.phoneExt,
                 r.floor,
-                r.roomNo,
-                r.accessCode,
+                if (desensitised && r.roomNo.isNotBlank()) "***" else r.roomNo,
+                if (desensitised && r.accessCode.isNotBlank()) "***" else r.accessCode,
                 if (r.elevatorType == ElevatorType.UNKNOWN) "" else r.elevatorType.elevatorLabel(),
                 r.doorIntact.doorLabel(),
                 r.canOpenFromAbove.canOpenLabel(),
@@ -67,8 +71,13 @@ object CsvExporter {
 
     private fun escape(value: String): String {
         if (value.isEmpty()) return ""
-        val needsQuotes = value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
-        val cleaned = value.replace("\"", "\"\"")
+        // Neutralise spreadsheet formula injection before quoting: a leading =, +, -, @, tab or
+        // carriage return would otherwise be evaluated by Excel / Sheets on open.
+        val safe = if (value.first() in FORMULA_PREFIXES) "'$value" else value
+        val needsQuotes = safe.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+        val cleaned = safe.replace("\"", "\"\"")
         return if (needsQuotes) "\"$cleaned\"" else cleaned
     }
+
+    private val FORMULA_PREFIXES = charArrayOf('=', '+', '-', '@', '\t', '\r')
 }

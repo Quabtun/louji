@@ -152,7 +152,8 @@ private const val ROUTE_LEDGER = "ledger"
 private const val ROUTE_BUILDINGS = "buildings"
 private const val ROUTE_INSIGHTS = "insights"
 private const val ROUTE_ME = "me"
-private const val ROUTE_EDIT = "edit?recordId={recordId}&duplicateId={duplicateId}&building={building}"
+private const val ROUTE_EDIT =
+    "edit?recordId={recordId}&duplicateId={duplicateId}&building={building}&pasteNow={pasteNow}"
 private const val ROUTE_DETAIL = "detail/{recordId}"
 private const val ROUTE_RECORD_MEDIA = "record-media/{recordId}"
 private const val ROUTE_VIEWER = "viewer/{recordId}?index={index}"
@@ -177,7 +178,6 @@ private fun LouJiRoot(
     var settingsReady by remember { mutableStateOf(false) }
     var showBackupReminder by remember { mutableStateOf(false) }
     var searchFocusTick by remember { mutableIntStateOf(0) }
-    var pasteRequestTick by remember { mutableIntStateOf(0) }
     var shareBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -239,28 +239,37 @@ private fun LouJiRoot(
             }
         }
 
-        suspend fun saveSharedOrder(payload: SharePayload): OrderAutoSaver.Saved {
+        suspend fun prepareSharedOrder(payload: SharePayload): PreparedShare {
             val text = payload.text?.trim().orEmpty()
             val fromText = if (text.isNotEmpty()) {
                 ClipboardOrderParser.parse(text)
             } else {
                 ParsedOrder()
             }
-            val ocrText = payload.imageUri?.let { uri ->
-                runCatching { container.orderTextRecognizer.recognize(uri) }.getOrDefault("")
-            }.orEmpty()
-            val fromImage = if (ocrText.isNotBlank()) {
-                ClipboardOrderParser.parse(ocrText)
+            // Copy the screenshot first: the external URI can be revoked as soon as this method
+            // returns, and the edit form must still be able to attach it.
+            val media = if (payload.imageMedia == null && payload.imageUri != null) {
+                runCatching { container.mediaStore.importFromUri(payload.imageUri) }.getOrNull()
             } else {
-                ParsedOrder()
+                payload.imageMedia
             }
+            val ocr = payload.ocr ?: payload.imageUri?.let { uri ->
+                runCatching { container.orderTextRecognizer.analyze(uri) }.getOrElse {
+                    com.quabtun.louji.data.OcrResult(errorReason = "无法读取图片文件")
+                }
+            }
+            val fromImage = ocr?.rawText
+                ?.takeIf { it.isNotBlank() }
+                ?.let { ClipboardOrderParser.parse(it) }
+                ?: ParsedOrder()
             val parsed = if (!fromText.isEmpty) fromText.fillMissingFrom(fromImage) else fromImage
-            if (parsed.isEmpty) error("empty order")
-            return container.orderAutoSaver.save(
+            return PreparedShare(
                 parsed = parsed,
-                screenshotUri = payload.imageUri,
-                sourceLabel = if (payload.imageUri != null) "分享截图" else "分享文字",
-                rawText = listOf(text, ocrText).filter { it.isNotBlank() }.joinToString("\n"),
+                rawText = listOf(text, ocr?.rawText.orEmpty())
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n"),
+                ocr = ocr,
+                media = media,
             )
         }
 
@@ -268,13 +277,35 @@ private fun LouJiRoot(
             if (shareTick == 0) return@LaunchedEffect
             val payload = container.shareIntake.payload.value ?: return@LaunchedEffect
             if (!settings.autoSaveOrders) {
-                // Leave the payload for the edit form, which pre-fills and stays open for review.
+                if (payload.ocr == null && payload.imageMedia == null) {
+                    // Prepare once here so the form never re-reads a revoked external URI.
+                    val prepared = runCatching { prepareSharedOrder(payload) }.getOrNull()
+                    if (prepared != null) {
+                        container.shareIntake.submit(
+                            payload.copy(
+                                ocr = prepared.ocr,
+                                imageMedia = prepared.media,
+                                text = payload.text ?: prepared.rawText.takeIf { it.isNotBlank() },
+                            ),
+                        )
+                    }
+                }
                 navController.navigate(editRoute())
                 return@LaunchedEffect
             }
             container.shareIntake.consume()
             shareBusy = true
-            val result = runCatching { saveSharedOrder(payload) }
+            val prepared = runCatching { prepareSharedOrder(payload) }
+            val result = prepared.mapCatching { item ->
+                if (item.parsed.isEmpty) error("empty order")
+                container.orderAutoSaver.save(
+                    parsed = item.parsed,
+                    screenshotUri = if (item.media == null) payload.imageUri else null,
+                    sourceLabel = if (payload.imageUri != null) "分享截图" else "分享文字",
+                    rawText = item.rawText,
+                    preImportedMedia = item.media,
+                )
+            }
             shareBusy = false
             result.fold(
                 onSuccess = { saved ->
@@ -285,12 +316,26 @@ private fun LouJiRoot(
                         snackbarHostState.showSnackbar("已自动保存：${saved.label()}")
                     }
                 },
-                onFailure = {
+                onFailure = { error ->
                     // Hand the screenshot/text back to the form so nothing the rider shared is lost.
-                    container.shareIntake.submit(payload)
+                    val preparedShare = prepared.getOrNull()
+                    container.shareIntake.submit(
+                        payload.copy(
+                            ocr = preparedShare?.ocr,
+                            imageMedia = preparedShare?.media,
+                        ),
+                    )
                     navController.navigate(editRoute())
+                    val reason = preparedShare?.ocr?.errorReason
                     scope.launch {
-                        snackbarHostState.showSnackbar("未识别出有效订单信息，已为你打开手动建单")
+                        snackbarHostState.showSnackbar(
+                            when {
+                                reason != null -> "识别未完成：$reason，已为你打开手动建单"
+                                error.message == "empty order" ->
+                                    "未识别出有效订单信息，已为你打开手动建单"
+                                else -> "保存失败，已为你打开手动建单"
+                            },
+                        )
                     }
                 },
             )
@@ -299,10 +344,7 @@ private fun LouJiRoot(
             if (shortcutTick > 0) {
                 when (shortcutKind) {
                     "record" -> navController.navigate(editRoute())
-                    "paste" -> {
-                        pasteRequestTick++
-                        navController.navigate(editRoute(pasteNow = true))
-                    }
+                    "paste" -> navController.navigate(editRoute(pasteNow = true))
                     "search" -> {
                         searchFocusTick++
                         switchTab(ROUTE_LEDGER)
@@ -334,7 +376,6 @@ private fun LouJiRoot(
                                 viewModel = viewModel,
                                 onCreate = { navController.navigate(editRoute()) },
                                 onOpenDetail = { id -> navController.navigate("detail/$id") },
-                                onOpenSettings = { switchTab(ROUTE_ME) },
                                 onOpenInsights = { switchTab(ROUTE_INSIGHTS) },
                                 onOpenBuilding = { location ->
                                     navController.navigate("building/${Uri.encode(location)}")
@@ -342,12 +383,17 @@ private fun LouJiRoot(
                                 onDuplicate = { id ->
                                     navController.navigate(editRoute(duplicateId = id))
                                 },
-                                onQuickEdit = { text, imageUri, message ->
+                                onQuickEdit = { text, imageUri, message, ocr, media ->
                                     if (message != null) {
                                         scope.launch { snackbarHostState.showSnackbar(message) }
                                     }
                                     container.shareIntake.submit(
-                                        SharePayload(text = text, imageUri = imageUri),
+                                        SharePayload(
+                                            text = text,
+                                            imageUri = imageUri,
+                                            ocr = ocr,
+                                            imageMedia = media,
+                                        ),
                                     )
                                     navController.navigate(editRoute())
                                 },
@@ -405,6 +451,10 @@ private fun LouJiRoot(
                                     type = NavType.StringType
                                     defaultValue = ""
                                 },
+                                navArgument("pasteNow") {
+                                    type = NavType.IntType
+                                    defaultValue = 0
+                                },
                             ),
                         ) { entry ->
                             val viewModel: RecordEditViewModel = viewModel(factory = factory)
@@ -417,10 +467,13 @@ private fun LouJiRoot(
                                 initialLocation = entry.arguments?.getString("building")
                                     ?.takeIf { it.isNotBlank() },
                                 shareIntake = container.shareIntake,
-                                autoPaste = pasteRequestTick > 0,
+                                autoPaste = entry.arguments?.getInt("pasteNow") == 1,
                                 onBack = { navController.popBackStack() },
                                 onSaved = { id ->
                                     navController.navigate("detail/$id") { popUpTo(ROUTE_LEDGER) }
+                                },
+                                onOpenAnnotate = { attachmentId ->
+                                    navController.navigate("annotate/$attachmentId")
                                 },
                             )
                         }
@@ -445,6 +498,9 @@ private fun LouJiRoot(
                                 onOpenMedia = { id, index ->
                                     navController.navigate("viewer/$id?index=$index")
                                 },
+                                onOpenMediaScreen = { id ->
+                                    navController.navigate("record-media/$id")
+                                },
                                 onOpenBuilding = { location ->
                                     navController.navigate("building/${Uri.encode(location)}")
                                 },
@@ -461,6 +517,7 @@ private fun LouJiRoot(
                             val viewModel: BuildingViewModel = viewModel(factory = factory)
                             BuildingDetailScreen(
                                 viewModel = viewModel,
+                                mediaStore = container.mediaStore,
                                 location = location,
                                 onBack = { navController.popBackStack() },
                                 onOpenRecord = { id -> navController.navigate("detail/$id") },
@@ -663,4 +720,12 @@ private fun editRoute(
     building: String? = null,
     pasteNow: Boolean = false,
 ): String = "edit?recordId=${recordId ?: -1}&duplicateId=${duplicateId ?: -1}" +
-    "&building=${Uri.encode(building.orEmpty())}"
+    "&building=${Uri.encode(building.orEmpty())}&pasteNow=${if (pasteNow) 1 else 0}"
+
+/** Everything the share pipeline learned once, reused by the edit form on failure. */
+private data class PreparedShare(
+    val parsed: ParsedOrder,
+    val rawText: String,
+    val ocr: com.quabtun.louji.data.OcrResult?,
+    val media: com.quabtun.louji.model.MediaDraft?,
+)

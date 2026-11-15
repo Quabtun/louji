@@ -4,53 +4,71 @@
   "title": "Design System: 楼记 LouJi",
   "extensions": {
     "colorMeta": {
+      "surface-light": {
+        "role": "neutral",
+        "displayName": "Cool Slate Background",
+        "canonical": "#F4F6F9",
+        "tonalRamp": ["#E2E8F0", "#EDF1F7", "#F4F6F9", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Night Slate Background",
+        "canonical": "#0B0E14",
+        "tonalRamp": ["#0B0E14", "#141923", "#1D2432", "#242C3D", "#334155", "#64748B", "#94A3B8", "#F1F5F9"]
+      },
       "ink": {
         "role": "neutral",
-        "displayName": "Ink",
-        "canonical": "#121517",
-        "tonalRamp": ["#0A0C0D", "#121517", "#1C1F22", "#2A2D30", "#3F4143", "#777A75", "#C5C6C1", "#E8E6E1"]
-      },
-      "paper": {
-        "role": "neutral",
-        "displayName": "Concrete Paper",
-        "canonical": "#F4F1EA",
-        "tonalRamp": ["#2A2927", "#4A4843", "#6B6862", "#908C84", "#B8B3A9", "#D8D3C8", "#E6E1D6", "#F4F1EA"]
+        "displayName": "Ink Text",
+        "canonical": "#0F172A",
+        "tonalRamp": ["#0B0E14", "#0F172A", "#1D2432", "#334155", "#64748B", "#94A3B8", "#E2E8F0", "#F8FAFC"]
       },
       "safety-amber": {
         "role": "primary",
-        "displayName": "Safety Amber",
+        "displayName": "Action Amber",
+        "canonical": "#FFB800",
+        "tonalRamp": ["#3A2A00", "#5C4300", "#7A5900", "#A87900", "#D6A400", "#FFB800", "#FFC83D", "#FFE7A3"]
+      },
+      "amber-text-light": {
+        "role": "primary",
+        "displayName": "Amber Text (Light)",
+        "canonical": "#D97706",
+        "tonalRamp": ["#3A2A00", "#5C4300", "#7A5900", "#A87900", "#D97706", "#F59E0B", "#FBBF24", "#FDE68A"]
+      },
+      "amber-text-dark": {
+        "role": "primary",
+        "displayName": "Amber Text (Dark)",
         "canonical": "#FFC83D",
         "tonalRamp": ["#3A2A00", "#5C4300", "#7A5900", "#A87900", "#D6A400", "#FFC83D", "#FFDB7A", "#FFEEB8"]
       },
-      "amber-deep": {
-        "role": "primary",
-        "displayName": "Amber Deep",
-        "canonical": "#6A4B00",
-        "tonalRamp": ["#241A00", "#3A2A00", "#4A3600", "#5A4300", "#6A4B00", "#8A5A00", "#B07A00", "#FFE08A"]
-      },
-      "signal-green": {
+      "pass-green": {
         "role": "secondary",
-        "displayName": "Signal Green",
-        "canonical": "#1F6B45",
-        "tonalRamp": ["#06281A", "#0B3E28", "#0F5132", "#176B45", "#258A5C", "#46B37A", "#8ADBAE", "#D5F5E2"]
+        "displayName": "Pass Green",
+        "canonical": "#059669",
+        "tonalRamp": ["#052E22", "#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#A7F3D0", "#ECFDF5"]
       },
-      "signal-green-night": {
+      "climb-orange": {
         "role": "secondary",
-        "displayName": "Signal Green Night",
-        "canonical": "#6FE3A1",
-        "tonalRamp": ["#0B3E28", "#0F5132", "#176B45", "#258A5C", "#46B37A", "#6FE3A1", "#A9F2C8", "#D5F5E2"]
+        "displayName": "Climb Orange",
+        "canonical": "#EA580C",
+        "tonalRamp": ["#431407", "#7C2D12", "#9A3412", "#C2410C", "#EA580C", "#F97316", "#FED7AA", "#FFF7ED"]
       },
-      "concrete": {
+      "danger-red": {
         "role": "tertiary",
-        "displayName": "Concrete",
-        "canonical": "#5A656B",
-        "tonalRamp": ["#1E2427", "#2B3236", "#3E4C52", "#4B5B62", "#5A656B", "#8A9499", "#B9C0C3", "#E6E1D6"]
+        "displayName": "Danger Red",
+        "canonical": "#DC2626",
+        "tonalRamp": ["#450A0A", "#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#FECACA", "#FEF2F2"]
       },
-      "alert-red": {
+      "info-blue": {
+        "role": "tertiary",
+        "displayName": "Info Blue",
+        "canonical": "#2563EB",
+        "tonalRamp": ["#172554", "#1E3A8A", "#1D4ED8", "#2563EB", "#3B82F6", "#60A5FA", "#BFDBFE", "#EFF6FF"]
+      },
+      "rule": {
         "role": "neutral",
-        "displayName": "Alert Red",
-        "canonical": "#B3261E",
-        "tonalRamp": ["#410E0B", "#690005", "#93000A", "#B3261E", "#D94B43", "#F08A82", "#F9DEDC", "#FFDAD6"]
+        "displayName": "Hairline Rule",
+        "canonical": "#E2E8F0",
+        "tonalRamp": ["#0B0E14", "#141923", "#1D2432", "#242C3D", "#E2E8F0", "#EDF1F7", "#F4F6F9", "#FFFFFF"]
       }
     },
     "typographyMeta": {

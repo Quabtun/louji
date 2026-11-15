@@ -72,28 +72,39 @@ object ClipboardOrderParser {
     private const val MAX_INPUT = 12_000
 
     private val addressLabel = Regex(
-        """(?:收货地址|送餐地址|配送地址|地址|送到)\s*[:：]\s*(.+)""",
+        """(?:收货地址|送餐地址|配送地址|顾客地址|地址|送到)\s*[:：]\s*(.+)""",
         RegexOption.IGNORE_CASE,
     )
-    private val addressKeyword = Regex("""(小区|花园|公寓|大厦|苑|号楼|栋|单元|路|街|道|巷)""")
-    private val orderLabel = Regex(
-        """(?:订单号|订单编号|单号)\s*[:：#]?\s*([A-Za-z0-9][A-Za-z0-9-]{2,31})""",
+    private val addressKeyword = Regex(
+        """(小区|花园|公寓|大厦|苑|号楼|栋|单元|路|街|道|巷|广场|中心|城|村|里|居|府|庭|境|公馆|名邸|院|弄|幢|(?<!日)(?<!星)(?<!学)期|SOHO|A座|B座|C座|D座)""",
         RegexOption.IGNORE_CASE,
+    )
+    private val orderLabel = Regex(
+        """(?:订单号|订单编号|单号|流水号|取货码|取餐码|取餐号)\s*[:：#]?\s*([A-Za-z0-9][A-Za-z0-9-]{1,31})""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val hashOrder = Regex("""(?<![A-Za-z0-9])#\s*([A-Za-z0-9]{2,32})""")
+    private val longOrderDigits = Regex(
+        """(?:订单号|订单编号|单号)\s*[:：#]?\s*((?:\d\s*){6,})""",
     )
     private val genericOrder = Regex(
         """(?:^|\s)订单\s*[:：#]?\s*([A-Za-z0-9][A-Za-z0-9-]{2,31})""",
         RegexOption.IGNORE_CASE,
     )
-    private val phoneTail = Regex("""尾号\s*[:：]?\s*(\d{4})""")
-    private val maskedPhone = Regex("""(?<!\d)1[3-9]\d{0,2}\*{2,5}(\d{4})(?!\d)""")
-    private val phoneNumber = Regex("""(?<!\d)(1[3-9]\d{9})(?!\d)""")
-    private val phoneWithDashExt = Regex("""(?<!\d)1[3-9]\d{9}\s*[-－—]\s*(\d{2,6})(?!\d)""")
+    private val phoneTail = Regex("""尾\s*号\s*[:：]?\s*((?:\d\s*){4})""")
+    private val maskedPhone = Regex(
+        """(?<!\d)1[3-9]\d{0,2}[\s*＊×xX•·]{2,8}(\d{4})(?!\d)""",
+    )
+    private val phoneNumber = Regex("""(?<!\d)(1[3-9](?:\s*\d){9})(?!\d)""")
+    private val phoneWithDashExt = Regex(
+        """(?<!\d)1[3-9](?:\s*\d){9}\s*[-－—]\s*(\d{2,6})(?!\d)""",
+    )
     private val extLabel = Regex("""(?:转接号|分机号?|转)\s*[:：]?\s*(\d{2,6})""")
-    private val floorLabel = Regex("""楼层\s*[:：]?\s*(\d{1,3})""")
+    private val floorLabel = Regex("""楼\s*层\s*[:：]?\s*((?:\d\s*){1,3})""")
     private val floorSuffix = Regex("""(?<![\dA-Za-z])(\d{1,3})\s*(?:楼|层|F|f)(?!\s*号)""")
     private val basementFloor = Regex("""(?:地下\s*(\d{1,2})\s*层?)|(?:B\s*(\d{1,2})\s*(?:楼|层|F))""")
     private val roomLabel = Regex(
-        """(?:房号|房间号|房间)\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9-]{1,11})""",
+        """房\s*(?:号|间)\s*[:：]?\s*((?:[A-Za-z0-9]\s*){2,12})""",
         RegexOption.IGNORE_CASE,
     )
     private val roomDashed = Regex("""(?<![\dA-Za-z])([A-Za-z]?\d{1,3}-\d{3,4})(?![\dA-Za-z])""")
@@ -103,24 +114,80 @@ object ClipboardOrderParser {
     private val maleWords = Regex("""先生|男士|帅哥""")
     private val femaleWords = Regex("""女士|小姐|太太|美女""")
 
+    /** A line that is only a field label, with or without a trailing colon. */
+    private val bareLabel = Regex(
+        """^(收货地址|送餐地址|配送地址|顾客地址|地址|送到|订单号|订单编号|单号|流水号|取货码)\s*[:：]?$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** UI chrome that OCR picks up next to the real value. */
+    private val noiseWords = listOf(
+        "查看地图", "拨打电话", "打电话", "导航", "联系顾客", "联系商家", "联系骑手",
+        "复制", "呼叫", "一键拨号", "查看详情", "展开",
+    )
+
+    /** Content that never starts an address, even if it happens to contain a keyword char. */
+    private val nonAddressLine = Regex(
+        """^(日期|时间|备注|订单|温馨提示|预计|送达|骑手|商家|顾客|电话|手机|编号|金额|支付)""",
+    )
+
+    /** Label markers that end the location part, tolerant of OCR spacing inside the label. */
+    private val locationStopLabel = Regex(
+        "尾\\s*号|手\\s*机|电\\s*话|楼\\s*层|房\\s*号|房\\s*间|订\\s*单|分\\s*机|备\\s*注" +
+            "|查看地图|拨打电话|打电话|导航|联系顾客|联系商家|复制|呼叫",
+    )
+
     fun parse(raw: String): ParsedOrder {
         val text = raw.take(MAX_INPUT)
             .replace('\u00A0', ' ')
             .replace("\r\n", "\n")
         if (text.isBlank()) return ParsedOrder()
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val lines = mergeLabelLines(text.lines().map { it.trim() }.filter { it.isNotEmpty() })
+        val normalized = lines.joinToString("\n")
         val address = splitAddress(parseRawLocation(lines))
         return ParsedOrder(
             location = address.location,
-            orderNo = parseOrderNo(text),
-            phoneTail = parsePhoneTail(text),
-            phoneExt = parsePhoneExt(text),
-            floor = parseFloor(text) ?: address.floor,
-            roomNo = parseRoom(text) ?: address.roomNo,
-            gender = parseGender(text),
-            deliveryMethod = parseDelivery(text),
-            remarkHint = parseRemarkHint(text),
+            orderNo = parseOrderNo(normalized),
+            phoneTail = parsePhoneTail(normalized),
+            phoneExt = parsePhoneExt(normalized),
+            floor = parseFloor(normalized) ?: address.floor,
+            roomNo = parseRoom(normalized) ?: address.roomNo,
+            gender = parseGender(normalized),
+            deliveryMethod = parseDelivery(normalized),
+            remarkHint = parseRemarkHint(normalized),
         )
+    }
+
+    /**
+     * Joins a label-only line ("收货地址" with no value) to the next meaningful line so screenshots
+     * that wrap the label and the value onto separate rows still parse.
+     */
+    private fun mergeLabelLines(lines: List<String>): List<String> {
+        val merged = mutableListOf<String>()
+        var index = 0
+        while (index < lines.size) {
+            val line = lines[index]
+            val label = bareLabel.find(line)?.groupValues?.getOrNull(1)
+            if (label != null) {
+                var next = index + 1
+                while (next < lines.size && isNoiseLine(lines[next])) next++
+                val candidate = lines.getOrNull(next)
+                if (candidate != null && bareLabel.find(candidate) == null) {
+                    merged += "$label：$candidate"
+                    index = next + 1
+                    continue
+                }
+            }
+            merged += line
+            index++
+        }
+        return merged
+    }
+
+    private fun isNoiseLine(line: String): Boolean {
+        val trimmed = line.trim(' ', '：', ':', '|', '-', '·')
+        if (trimmed.isEmpty()) return true
+        return noiseWords.any { trimmed == it || trimmed.startsWith(it) }
     }
 
     private fun parseRawLocation(lines: List<String>): String? {
@@ -134,7 +201,11 @@ object ClipboardOrderParser {
                 addressKeyword.containsMatchIn(line) &&
                 !line.contains("订单") &&
                 !line.contains("尾号") &&
-                !phoneNumber.containsMatchIn(line)
+                !line.contains("房号") &&
+                !line.contains("备注") &&
+                !phoneNumber.containsMatchIn(line) &&
+                !nonAddressLine.containsMatchIn(line) &&
+                !isNoiseLine(line)
             ) {
                 cleanLocation(line)?.let { return it }
             }
@@ -143,23 +214,19 @@ object ClipboardOrderParser {
     }
 
     private fun cleanLocation(raw: String): String? {
-        val value = raw
-            .replace(
-                Regex("""^(?:收货地址|送餐地址|配送地址|地址|送到)\s*[:：]?\s*"""),
-                "",
-            )
-            .substringBefore("尾号")
-            .substringBefore("手机")
-            .substringBefore("电话")
-            .substringBefore("楼层")
-            .substringBefore("房号")
-            .substringBefore("订单")
-            .substringBefore("分机")
-            .substringBefore("备注")
-            .substringBefore("  ")
+        var value = raw.replace(
+            Regex("""^(?:收货地址|送餐地址|配送地址|顾客地址|地址|送到)\s*[:：]?\s*"""),
+            "",
+        )
+        // Semantic boundaries only: a double space is how OCR separates columns on the same row,
+        // so cutting there would throw away a valid "小区 3栋" location.
+        val stop = locationStopLabel.find(value)
+        if (stop != null) value = value.substring(0, stop.range.first)
+        value = value
             .trim()
             .trimStart('：', ':', '#', '-', ' ')
-            .trim('，', ',', '。', '；', ';')
+            .trim('，', ',', '。', '；', ';', '·', '|')
+            .replace(Regex("""\s{2,}"""), " ")
         return value.takeIf { it.length in 2..60 }
     }
 
@@ -197,17 +264,16 @@ object ClipboardOrderParser {
             }
         }
 
-        // 3) bare trailing digits after a building/unit marker
+        // 3) bare trailing room digits: `3栋1804` / `B座702` / `2单元501`. Only 3-4 digit numbers
+        //    in a plausible room range count, so building numbers (`12号院`, `3号楼`) stay in the
+        //    location instead of being mistaken for rooms.
         if (room == null && buildingMarker.containsMatchIn(rest)) {
             trailingRoomDigits.find(rest)?.let { match ->
                 val candidate = match.groupValues[1]
-                val start = match.range.first
-                val previous = rest.getOrNull(start - 1)
-                val isBuildingNumber = previous == '栋' || previous == '号' || previous == '座' ||
-                    previous == '-' || previous == '元'
-                if (!isBuildingNumber) {
+                val value = candidate.toIntOrNull()
+                if (value != null && value in 101..9999) {
                     room = candidate
-                    rest = rest.substring(0, start).trim()
+                    rest = rest.substring(0, match.range.first).trim()
                 }
             }
         }
@@ -242,17 +308,32 @@ object ClipboardOrderParser {
         return AddressParts(location = location, floor = floor, roomNo = room)
     }
 
-    private fun parseOrderNo(text: String): String? =
-        (orderLabel.find(text) ?: genericOrder.find(text))
+    private fun parseOrderNo(text: String): String? {
+        orderLabel.find(text)?.groupValues?.getOrNull(1)
+            ?.trim()
+            ?.let { return it.takeIf { value -> value.length in 2..32 } }
+        longOrderDigits.find(text)?.groupValues?.getOrNull(1)?.let { raw ->
+            val digits = raw.filter(Char::isDigit)
+            if (digits.length in 6..32) return digits
+        }
+        hashOrder.find(text)?.groupValues?.getOrNull(1)
+            ?.trim()
+            ?.let { return it.takeIf { value -> value.length in 2..32 } }
+        return genericOrder.find(text)
             ?.groupValues
             ?.getOrNull(1)
             ?.trim()
             ?.takeIf { it.length in 3..32 }
+            ?.takeIf { candidate ->
+                // A bare short number after the word "订单" is usually a count, not an id.
+                candidate.any { !it.isDigit() } || candidate.length >= 6
+            }
+    }
 
     private fun parsePhoneTail(text: String): String? =
-        phoneTail.find(text)?.groupValues?.getOrNull(1)
+        phoneTail.find(text)?.groupValues?.getOrNull(1)?.filter(Char::isDigit)
             ?: maskedPhone.find(text)?.groupValues?.getOrNull(1)
-            ?: phoneNumber.find(text)?.value?.takeLast(4)
+            ?: phoneNumber.find(text)?.value?.filter(Char::isDigit)?.takeLast(4)
 
     private fun parsePhoneExt(text: String): String? {
         extLabel.find(text)?.groupValues?.getOrNull(1)?.let { return it }
@@ -261,7 +342,8 @@ object ClipboardOrderParser {
     }
 
     private fun parseFloor(text: String): String? =
-        floorLabel.find(text)?.groupValues?.getOrNull(1)
+        floorLabel.find(text)?.groupValues?.getOrNull(1)?.filter(Char::isDigit)
+            ?.takeIf { it.isNotBlank() }
             ?: basementFloor.find(text)?.let { match ->
                 val digits = match.groupValues[1].ifBlank { match.groupValues[2] }
                 if (digits.isBlank()) null else "B$digits"
@@ -270,6 +352,8 @@ object ClipboardOrderParser {
 
     private fun parseRoom(text: String): String? =
         roomLabel.find(text)?.groupValues?.getOrNull(1)
+            ?.filterNot(Char::isWhitespace)
+            ?.takeIf { it.isNotBlank() }
             ?: roomDashed.find(text)?.groupValues?.getOrNull(1)
             ?: roomSuffix.find(text)?.groupValues?.getOrNull(1)
 

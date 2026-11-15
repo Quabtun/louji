@@ -25,6 +25,10 @@ import kotlin.coroutines.resume
 object LocationHelper {
     sealed interface Result {
         data class Success(val place: String) : Result
+
+        /** Coordinates are known but the device has no usable geocoder (common without GMS). */
+        data class CoordinatesOnly(val label: String) : Result
+
         data object PermissionMissing : Result
         data object LocationDisabled : Result
         data object Timeout : Result
@@ -66,7 +70,7 @@ object LocationHelper {
         val recentLastKnown = lastKnownLocation(manager, allowedProviders)
             ?.takeIf { System.currentTimeMillis() - it.time <= RECENT_LAST_KNOWN_MS }
         if (recentLastKnown != null) {
-            return Result.Success(reverseGeocode(context, recentLastKnown))
+            return resolvePlace(context, recentLastKnown)
         }
 
         // Active requests are intentionally ordered network -> GPS: a quick network fix is
@@ -97,7 +101,7 @@ object LocationHelper {
                 Result.Timeout
             }
         }
-        return Result.Success(reverseGeocode(context, location))
+        return resolvePlace(context, location)
     }
 
     private fun hasFinePermission(context: Context): Boolean =
@@ -181,7 +185,7 @@ object LocationHelper {
     }
 
     @Suppress("DEPRECATION")
-    private fun reverseGeocode(context: Context, location: Location): String {
+    private fun resolvePlace(context: Context, location: Location): Result {
         val name = runCatching {
             if (!Geocoder.isPresent()) return@runCatching null
             Geocoder(context, Locale.CHINA)
@@ -195,12 +199,15 @@ object LocationHelper {
                 .joinToString("")
                 .takeIf { it.isNotBlank() }
         }
-        return name?.take(60) ?: String.format(
+        if (name != null) return Result.Success(name.take(60))
+        // Never put raw coordinates into the building-name field: it would pollute the library.
+        val label = String.format(
             Locale.US,
             "%.5f, %.5f",
             location.latitude,
             location.longitude,
         )
+        return Result.CoordinatesOnly(label)
     }
 
     private const val RECENT_LAST_KNOWN_MS = 2 * 60 * 1000L

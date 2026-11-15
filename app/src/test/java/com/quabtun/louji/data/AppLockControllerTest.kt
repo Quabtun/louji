@@ -55,4 +55,44 @@ class AppLockControllerTest {
         assertFalse(controller.state.value.enabled)
         assertFalse(controller.state.value.locked)
     }
+
+    @Test
+    fun unrelatedSettingsWriteDoesNotRelockAnUnlockedSession() = withController(
+        AppSettings(appLockEnabled = true),
+    ) { flow, controller ->
+        controller.unlock()
+        assertFalse(controller.state.value.locked)
+
+        // Same switch value, different unrelated fields — exactly what DataStore emits after
+        // writing lastUpdateCheck / lastBackupAt / theme / autoSaveOrders.
+        flow.value = AppSettings(
+            themeMode = com.quabtun.louji.model.ThemeMode.DARK,
+            autoCheckUpdates = false,
+            lastUpdateCheck = 123L,
+            appLockEnabled = true,
+            onboardingSeen = true,
+            backupReminderEnabled = false,
+            lastBackupAt = 456L,
+            autoSaveOrders = false,
+        )
+
+        assertTrue(controller.state.value.ready)
+        assertTrue(controller.state.value.enabled)
+        assertFalse(controller.state.value.locked)
+    }
+
+    @Test
+    fun enablingFromSettingsKeepsCurrentSessionUnlocked() = withController(AppSettings()) { flow, controller ->
+        assertFalse(controller.state.value.locked)
+
+        flow.value = AppSettings(appLockEnabled = true)
+
+        assertTrue(controller.state.value.enabled)
+        // The rider just passed the system credential prompt; locking again would be hostile.
+        assertFalse(controller.state.value.locked)
+
+        // Backgrounding still locks afterwards.
+        controller.lockIfEnabled()
+        assertTrue(controller.state.value.locked)
+    }
 }

@@ -230,7 +230,7 @@ fun CameraCaptureScreen(
         }
     }
 
-    LaunchedEffect(flashOn, imageCapture, camera) {
+    LaunchedEffect(flashOn, videoMode, imageCapture, camera) {
         imageCapture?.flashMode = if (flashOn) {
             ImageCapture.FLASH_MODE_ON
         } else {

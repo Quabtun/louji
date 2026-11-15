@@ -165,7 +165,7 @@ class RecordDaoTest {
         val archivedId = recordDao.insert(record("归档小区", "9", noStairs = TriState.YES))
         recordDao.setArchived(archivedId, true)
 
-        val decision = recordDao.observeDecisionStats().first()
+        val decision = recordDao.observeDecisionStats(0, Long.MAX_VALUE).first()
         assertEquals(3, decision.total)
         assertEquals(1, decision.noStairs)
         assertEquals(2, decision.stairs)
@@ -173,7 +173,7 @@ class RecordDaoTest {
         assertEquals(2, decision.willComeDown)
         assertEquals(1, decision.wontComeDown)
 
-        val locations = recordDao.observeLocationStats().first()
+        val locations = recordDao.observeLocationStats(0, Long.MAX_VALUE).first()
         assertEquals(listOf("阳光花园", "老小区"), locations.map { it.location })
         val sunny = locations.first { it.location == "阳光花园" }
         assertEquals(2, sunny.total)
@@ -265,6 +265,52 @@ class RecordDaoTest {
         }
         assertEquals(25, seen.size)
         assertEquals(25, seen.toSet().size)
+    }
+
+    @Test
+    fun decisionStatsAndRankingsFollowPeriodAndExcludeArchived() = runBlocking {
+        val now = 1_700_000_000_000L
+        val day = 24L * 60 * 60 * 1000
+        suspend fun at(createdAt: Long, stairs: TriState, archived: Boolean = false) {
+            recordDao.insert(
+                record("阳光花园", "P$createdAt", noStairs = stairs, archived = archived)
+                    .copy(createdAt = createdAt, updatedAt = createdAt),
+            )
+        }
+        at(now, TriState.YES)
+        at(now - 2 * day, TriState.NO)
+        at(now - 20 * day, TriState.NO)
+        at(now - 30 * day, TriState.YES, archived = true)
+
+        val recent = recordDao.observeDecisionStats(now - 7 * day, now + 1).first()
+        assertEquals(2, recent.total)
+        assertEquals(1, recent.noStairs)
+        assertEquals(1, recent.stairs)
+
+        val all = recordDao.observeDecisionStats(0, Long.MAX_VALUE).first()
+        assertEquals(3, all.total)
+        assertEquals(2, all.stairs)
+
+        val recentRank = database.buildingDao()
+            .observeRankingsForRange(now - 7 * day, now + 1)
+            .first()
+        assertEquals(1, recentRank.size)
+        assertEquals(2, recentRank.single().total)
+
+        val allRank = database.buildingDao().observeRankings().first()
+        assertEquals(3, allRank.single().total)
+    }
+
+    @Test
+    fun pendingFilterAndCountOnlyIncludeUndecidedActiveRecords() = runBlocking {
+        recordDao.insert(record("甲", "1", noStairs = TriState.UNKNOWN))
+        recordDao.insert(record("乙", "2", noStairs = TriState.YES))
+        recordDao.insert(record("丙", "3", noStairs = TriState.UNKNOWN, archived = true))
+
+        assertEquals(1, recordDao.observePendingCount().first())
+        val pending = recordDao.observeFilteredByDate("", "PENDING", 0, 0, 0).first()
+        assertEquals(1, pending.size)
+        assertEquals("甲", pending.single().record.location)
     }
 
     private fun record(

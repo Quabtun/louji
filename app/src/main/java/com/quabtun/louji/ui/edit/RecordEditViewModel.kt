@@ -52,6 +52,8 @@ data class RecordEditUiState(
     val loadFailed: Boolean = false,
     val syncBuildingProfile: Boolean = true,
     val recognizedFields: List<String> = emptyList(),
+    /** Raw OCR lines kept for the "OCR 原文候选" picker when parsing found nothing usable. */
+    val ocrLines: List<String> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -134,23 +136,29 @@ class RecordEditViewModel(
                 if (shared != null) {
                     shareIntake.consume()
                     shared.text?.let { draft = draft.mergedWith(ClipboardOrderParser.parse(it)) }
-                    shared.imageUri?.let { uri ->
-                        val text = runCatching { recognizer.recognize(uri) }.getOrDefault("")
-                        if (text.isNotBlank()) {
-                            draft = draft.mergedWith(ClipboardOrderParser.parse(text))
+                    // Reuse OCR/media produced by the receiving screen: the external URI may
+                    // already be revoked, and a second OCR pass would double the cost.
+                    val ocr = shared.ocr
+                    if (ocr != null && ocr.visualLines.isNotEmpty()) {
+                        draft = draft.mergedWith(ClipboardOrderParser.parse(ocr.rawText))
+                    }
+                    if (ocr != null && ocr.errorReason != null) {
+                        _ui.update { it.copy(message = "识别未完成：${ocr.errorReason}") }
+                    }
+                    val media = shared.imageMedia ?: shared.imageUri?.let { uri ->
+                        runCatching { mediaStore.importFromUri(uri) }.getOrNull()
+                    }
+                    if (media != null) {
+                        _ui.update {
+                            it.copy(
+                                pendingMedia = it.pendingMedia + media.copy(
+                                    category = AttachmentCategory.ORDER_SCREENSHOT,
+                                ),
+                                ocrLines = ocr?.visualLines.orEmpty(),
+                            )
                         }
-                        val media = runCatching { mediaStore.importFromUri(uri) }.getOrNull()
-                        if (media != null) {
-                            _ui.update {
-                                it.copy(
-                                    pendingMedia = it.pendingMedia + media.copy(
-                                        category = AttachmentCategory.ORDER_SCREENSHOT,
-                                    ),
-                                )
-                            }
-                        } else {
-                            sharedImageFailed = true
-                        }
+                    } else if (shared.imageUri != null) {
+                        sharedImageFailed = true
                     }
                 }
                 // Building prefill ("在此楼栋记一单").
@@ -256,7 +264,7 @@ class RecordEditViewModel(
             val added = mutableListOf<MediaDraft>()
             var failure: String? = null
             var count = mediaCount()
-            val imageUris = uris.filter { uri -> uri.isImage() }
+            var firstImageSeen = false
             for (uri in uris) {
                 if (count >= MAX_MEDIA) {
                     failure = "一条记录最多 $MAX_MEDIA 个附件"
@@ -264,8 +272,11 @@ class RecordEditViewModel(
                 }
                 try {
                     val draft = mediaStore.importFromUri(uri)
-                    val isFirstImage = imageUris.isNotEmpty() && uri == imageUris.first() &&
-                        added.none { it.type == com.quabtun.louji.model.MediaType.IMAGE }
+                    // Photo Picker URIs commonly have no file extension, so the imported type —
+                    // not `lastPathSegment` — decides what counts as the order screenshot.
+                    val isFirstImage = !firstImageSeen &&
+                        draft.type == com.quabtun.louji.model.MediaType.IMAGE
+                    if (isFirstImage) firstImageSeen = true
                     added += if (isFirstImage) {
                         draft.copy(category = AttachmentCategory.ORDER_SCREENSHOT)
                     } else {
@@ -288,7 +299,22 @@ class RecordEditViewModel(
 
     fun removePending(media: MediaDraft) {
         mediaStore.deleteDraft(media)
-        _ui.update { it.copy(pendingMedia = it.pendingMedia - media) }
+        _ui.update { state -> state.copy(pendingMedia = state.pendingMedia - media) }
+    }
+
+    /** Swaps a draft for its annotated version, keeping position and category. */
+    fun replacePending(old: MediaDraft, annotated: MediaDraft) {
+        val index = _ui.value.pendingMedia.indexOf(old)
+        if (index < 0) {
+            mediaStore.deleteDraft(annotated)
+            return
+        }
+        mediaStore.deleteDraft(old)
+        _ui.update { state ->
+            val next = state.pendingMedia.toMutableList()
+            next[index] = annotated
+            state.copy(pendingMedia = next)
+        }
     }
 
     fun removeExisting(attachmentId: Long) {
@@ -320,46 +346,105 @@ class RecordEditViewModel(
         _ui.update { it.copy(message = null) }
     }
 
-    /** OCR a screenshot, fill the form and attach it as the order screenshot. */
+    /** OCR a screenshot, attach it as the order screenshot and fill whatever parsed cleanly. */
     fun recognizeImage(uri: Uri, attach: Boolean = true) {
         viewModelScope.launch {
             _ui.update { it.copy(recognizing = true, message = null) }
-            try {
-                val text = recognizer.recognize(uri)
-                if (text.isBlank()) {
-                    _ui.update { it.copy(recognizing = false, message = "没识别到文字，可手动填写") }
-                    return@launch
-                }
-                val parsed = ClipboardOrderParser.parse(text)
-                if (parsed.isEmpty) {
-                    _ui.update {
-                        it.copy(recognizing = false, message = "截图里没识别到订单信息，可手动填写")
+            // The screenshot is attached first: a failed parse must never lose the rider's image.
+            var importFailure: String? = null
+            if (attach && mediaCount() < MAX_MEDIA) {
+                val media = runCatching { mediaStore.importFromUri(uri) }.getOrNull()
+                if (media != null) {
+                    val asOrder = media.copy(category = AttachmentCategory.ORDER_SCREENSHOT)
+                    _ui.update { state ->
+                        state.copy(pendingMedia = state.pendingMedia + asOrder)
                     }
-                    return@launch
+                } else {
+                    importFailure = "截图无法读取，未挂到记录上"
                 }
-                if (attach && mediaCount() < MAX_MEDIA) {
-                    val draft = runCatching { mediaStore.importFromUri(uri) }.getOrNull()
-                    if (draft != null) {
-                        val asOrder = draft.copy(category = AttachmentCategory.ORDER_SCREENSHOT)
-                        _ui.update { state ->
-                            state.copy(pendingMedia = state.pendingMedia + asOrder)
-                        }
-                    }
+            }
+
+            val result = runCatching { recognizer.analyze(uri) }
+                .getOrElse { error ->
+                    com.quabtun.louji.data.OcrResult(
+                        errorReason = error.message ?: "识别失败",
+                    )
                 }
-                updateDraft { mergedWith(parsed) }
+            if (result.rawText.isBlank()) {
                 _ui.update {
                     it.copy(
                         recognizing = false,
-                        recognizedFields = parsed.labels(),
-                        message = "已识别并填入：" + parsed.labels().joinToString("、"),
+                        ocrLines = result.visualLines,
+                        message = listOfNotNull(result.errorReason, importFailure)
+                            .firstOrNull()
+                            ?.let { reason -> "识别未完成：$reason" }
+                            ?: "没识别到文字，可手动填写",
                     )
                 }
-            } catch (error: Throwable) {
+                return@launch
+            }
+
+            val parsed = ClipboardOrderParser.parse(result.rawText)
+            if (parsed.isEmpty) {
                 _ui.update {
-                    it.copy(recognizing = false, message = error.message ?: "识别失败，可手动填写")
+                    it.copy(
+                        recognizing = false,
+                        ocrLines = result.visualLines,
+                        message = "没识别到订单字段，可从下方 OCR 原文拾取" +
+                            (importFailure?.let { "（$it）" } ?: ""),
+                    )
                 }
+                return@launch
+            }
+            updateDraft { mergedWith(parsed) }
+            _ui.update {
+                it.copy(
+                    recognizing = false,
+                    recognizedFields = parsed.labels(),
+                    ocrLines = result.visualLines,
+                    message = "已识别并填入：" + parsed.labels().joinToString("、"),
+                )
             }
         }
+    }
+
+    /** Applies one raw OCR line to a field the rider picked from the candidate panel. */
+    fun applyOcrLine(line: String, field: OcrField) {
+        val value = line.trim().take(120)
+        if (value.isEmpty()) return
+        when (field) {
+            OcrField.LOCATION -> {
+                val address = ClipboardOrderParser.splitAddress(value)
+                updateDraft {
+                    copy(
+                        location = (address.location ?: value).take(60),
+                        floor = address.floor ?: floor,
+                        roomNo = address.roomNo ?: roomNo,
+                    )
+                }
+            }
+            OcrField.FLOOR -> {
+                val digits = Regex("""\d{1,3}""").find(value)?.value
+                if (digits != null) updateDraft { copy(floor = digits) }
+            }
+            OcrField.ROOM -> {
+                val room = Regex("""[A-Za-z]?\d{1,3}-?\d{0,4}""").find(value)?.value
+                if (room != null) updateDraft { copy(roomNo = room) }
+            }
+            OcrField.PHONE_TAIL -> {
+                val digits = value.filter(Char::isDigit)
+                if (digits.length >= 4) updateDraft { copy(phoneTail = digits.takeLast(4)) }
+            }
+            OcrField.PHONE_EXT -> {
+                val digits = value.filter(Char::isDigit)
+                if (digits.isNotEmpty()) updateDraft { copy(phoneExt = digits.take(8)) }
+            }
+            OcrField.REMARK -> updateDraft { copy(remark = value.take(300)) }
+        }
+    }
+
+    fun clearOcrLines() {
+        _ui.update { it.copy(ocrLines = emptyList()) }
     }
 
     fun applyParsed(parsed: com.quabtun.louji.util.ParsedOrder, overwrite: Boolean) {
@@ -387,13 +472,25 @@ class RecordEditViewModel(
         }
     }
 
+    /**
+     * Applies a building profile without destroying what the rider already typed: empty access
+     * codes and UNKNOWN tri-states stay as they were, and a direct lift suggests "免爬".
+     */
     fun applyBuilding(profile: BuildingProfileEntity) {
         updateDraft {
             copy(
-                elevatorType = profile.elevatorType,
-                accessCode = profile.accessCode,
-                doorIntact = profile.doorIntact,
-                canOpenFromAbove = profile.canOpenFromAbove,
+                elevatorType = profile.elevatorType.takeIf { it != ElevatorType.UNKNOWN }
+                    ?: elevatorType,
+                accessCode = profile.accessCode.takeIf { it.isNotBlank() } ?: accessCode,
+                doorIntact = profile.doorIntact.takeIf { it != TriState.UNKNOWN } ?: doorIntact,
+                canOpenFromAbove = profile.canOpenFromAbove.takeIf { it != TriState.UNKNOWN }
+                    ?: canOpenFromAbove,
+                noStairs = when {
+                    noStairs != TriState.UNKNOWN -> noStairs
+                    profile.elevatorType == ElevatorType.STAIRS_ONLY -> TriState.NO
+                    profile.elevatorType == ElevatorType.DIRECT && !isWarning -> TriState.YES
+                    else -> noStairs
+                },
             )
         }
     }
@@ -526,8 +623,12 @@ private fun RecordDraft.mergedWith(
     )
 }
 
-private fun Uri.isImage(): Boolean {
-    val path = lastPathSegment?.lowercase().orEmpty()
-    return path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ||
-        path.endsWith(".webp") || path.endsWith(".heic")
+/** Fields the rider can fill from a raw OCR line. */
+enum class OcrField(val label: String) {
+    LOCATION("位置"),
+    FLOOR("楼层"),
+    ROOM("房号"),
+    PHONE_TAIL("尾号"),
+    PHONE_EXT("分机号"),
+    REMARK("备注"),
 }

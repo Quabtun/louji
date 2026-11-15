@@ -32,6 +32,11 @@ class BuildingViewModel(
     private val _sort = MutableStateFlow(BuildingSort.ORDERS)
     private val _location = MutableStateFlow("")
 
+    /** Exposed so the list screen has a single source of truth (survives rotation). */
+    val query: StateFlow<String> = _query
+    val filter: StateFlow<BuildingFilter> = _filter
+    val sort: StateFlow<BuildingSort> = _sort
+
     private val allBuildings: StateFlow<List<BuildingProfileEntity>> =
         repository.observeBuildings()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -117,6 +122,32 @@ class BuildingViewModel(
 
     val currentLocation: StateFlow<String> = _location
 
+    private val _similar = MutableStateFlow<List<BuildingProfileEntity>>(emptyList())
+    val similarBuildings: StateFlow<List<BuildingProfileEntity>> = _similar
+
+    /** Looks for guides whose name overlaps the current one, for merge suggestions. */
+    fun loadSimilar() {
+        val location = _location.value.trim()
+        if (location.isEmpty()) {
+            _similar.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _similar.value = runCatching { repository.findSimilarBuildings(location) }
+                .getOrDefault(emptyList())
+        }
+    }
+
+    fun mergeInto(targetLocation: String, onMerged: () -> Unit = {}) {
+        val source = _location.value.trim()
+        if (source.isEmpty() || source == targetLocation) return
+        viewModelScope.launch {
+            repository.mergeBuildings(source, targetLocation)
+            _location.value = targetLocation
+            onMerged()
+        }
+    }
+
     fun setQuery(value: String) {
         _query.value = value
     }
@@ -152,14 +183,47 @@ class BuildingViewModel(
         viewModelScope.launch { repository.saveBuilding(profile) }
     }
 
+    /**
+     * Pins/unpins the current building, creating the profile first if the rider opened a
+     * location that has no saved guide yet.
+     */
     fun togglePinned() {
-        val current = profile.value ?: return
-        viewModelScope.launch { repository.setBuildingPinned(current.id, !current.pinned) }
+        val location = _location.value.trim()
+        if (location.isEmpty()) return
+        viewModelScope.launch {
+            val current = repository.findBuilding(location)
+            if (current == null) {
+                val now = System.currentTimeMillis()
+                repository.saveBuilding(
+                    BuildingProfileEntity(
+                        location = location,
+                        pinned = true,
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
+                )
+            } else {
+                repository.setBuildingPinned(current.id, !current.pinned)
+            }
+        }
     }
 
-    fun delete() {
-        val current = profile.value ?: return
-        viewModelScope.launch { repository.deleteBuilding(current.id) }
+    /** Pin toggle from the list; updates only the flag so no other field is overwritten. */
+    fun setPinned(profile: BuildingProfileEntity, pinned: Boolean) {
+        viewModelScope.launch { repository.setBuildingPinned(profile.id, pinned) }
+    }
+
+    /** Deletes the guide and its cover file (the record history is kept). */
+    fun delete(onDeleted: () -> Unit = {}) {
+        val current = profile.value
+        if (current == null) {
+            onDeleted()
+            return
+        }
+        viewModelScope.launch {
+            repository.deleteBuilding(current.id)
+            onDeleted()
+        }
     }
 
     fun setCover(path: String?) {

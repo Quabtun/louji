@@ -315,6 +315,14 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
+                        title = "清理无关媒体",
+                        subtitle = "删除没有记录或楼栋封面引用的缓存图片/视频",
+                        icon = R.drawable.ic_gallery,
+                        modifier = Modifier.testTag("settings_clean_media"),
+                        onClick = { viewModel.cleanOrphans() },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
                         title = "媒体占用",
                         subtitle = storage?.let {
                             "${formatBytes(it.totalBytes)} · ${it.itemCount} 个文件"
@@ -608,6 +616,12 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {},
+            dismissButton = {
+                TextButton(
+                    onClick = viewModel::cancelBackup,
+                    modifier = Modifier.testTag("backup_cancel"),
+                ) { Text("取消") }
+            },
         )
     }
 

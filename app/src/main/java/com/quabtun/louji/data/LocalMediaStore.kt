@@ -40,9 +40,12 @@ class LocalMediaStore(
     fun mediaDirectory(): File = mediaRoot
 
     suspend fun importFromUri(uri: Uri): MediaDraft = withContext(Dispatchers.IO) {
-        val mimeType = resolver.getType(uri)?.lowercase()
+        val declared = resolver.getType(uri)?.lowercase()
             ?: MimeTypeMap.getSingleton()
                 .getMimeTypeFromExtension(uri.lastPathSegment?.substringAfterLast('.', "")?.lowercase())
+        // Photo Picker URIs often have neither a MIME type nor a file extension; sniff the bytes
+        // instead of failing a perfectly valid screenshot.
+        val mimeType = declared ?: sniffMimeType(uri)
             ?: throw IOException("无法识别这个文件的类型")
         val type = mediaTypeOf(mimeType) ?: throw IOException("只支持图片和视频")
         val extension = extensionFor(mimeType)
@@ -106,6 +109,27 @@ class LocalMediaStore(
     fun deleteDraft(draft: MediaDraft) {
         deletePath(draft.filePath)
         draft.thumbPath?.let(::deletePath)
+    }
+
+    /** Best-effort type detection for content URIs that expose neither MIME type nor extension. */
+    private fun sniffMimeType(uri: Uri): String? {
+        val asImage = runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            bounds.outWidth > 0 && bounds.outHeight > 0
+        }.getOrDefault(false)
+        if (asImage) return "image/jpeg"
+
+        val asVideo = runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION) != null
+            } finally {
+                retriever.release()
+            }
+        }.getOrDefault(false)
+        return if (asVideo) "video/mp4" else null
     }
 
     fun deleteAttachment(path: String, thumbPath: String?) {

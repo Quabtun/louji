@@ -61,6 +61,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private fun startOfTodayMillis(): Long = java.util.Calendar.getInstance().apply {
+    set(java.util.Calendar.HOUR_OF_DAY, 0)
+    set(java.util.Calendar.MINUTE, 0)
+    set(java.util.Calendar.SECOND, 0)
+    set(java.util.Calendar.MILLISECOND, 0)
+}.timeInMillis
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun StatsScreen(
@@ -71,6 +78,7 @@ fun StatsScreen(
     val rankings by viewModel.rankings.collectAsStateWithLifecycle()
     val heatmap by viewModel.heatmap.collectAsStateWithLifecycle()
     val period by viewModel.period.collectAsStateWithLifecycle()
+    val status = LocalLouJiStatusColors.current
     var leaderboardTab by remember { mutableStateOf(0) }
 
     Scaffold(
@@ -120,7 +128,7 @@ fun StatsScreen(
 
                 SectionHeader("近 14 天趋势")
                 Spacer(Modifier.height(12.dp))
-                TrendCard(buckets = data.buckets.takeLast(14))
+                TrendCard(data = data)
                 Spacer(Modifier.height(20.dp))
 
                 SectionHeader("跑单活跃度（近 12 周）")
@@ -133,14 +141,24 @@ fun StatsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { leaderboardTab = 0 }) {
                         Text(
-                            "💚 神仙免爬榜",
+                            "免爬榜",
                             fontWeight = if (leaderboardTab == 0) FontWeight.Bold else FontWeight.Normal,
+                            color = if (leaderboardTab == 0) {
+                                status.noStair
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         )
                     }
                     TextButton(onClick = { leaderboardTab = 1 }) {
                         Text(
-                            "🔥 硬核爬楼榜",
+                            "爬楼榜",
                             fontWeight = if (leaderboardTab == 1) FontWeight.Bold else FontWeight.Normal,
+                            color = if (leaderboardTab == 1) {
+                                status.stair
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         )
                     }
                 }
@@ -184,7 +202,7 @@ private fun MilestoneCard(data: StatsData) {
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "🏔️ 骑手爬楼里程碑",
+                text = "骑手爬楼里程碑",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -355,8 +373,30 @@ private fun Legend(color: Color, label: String, count: Int, total: Int) {
 }
 
 @Composable
-private fun TrendCard(buckets: List<DayBucket>) {
+private fun TrendCard(data: StatsData) {
     val status = LocalLouJiStatusColors.current
+    val buckets = data.buckets
+    val dayMs = 24L * 60 * 60 * 1000
+    val today = startOfTodayMillis()
+    // The window follows the selected period: 1 day today, 7 this week, 14 for month/all.
+    val windowDays = when (data.period) {
+        StatsPeriod.TODAY -> 1
+        StatsPeriod.WEEK -> 7
+        StatsPeriod.MONTH, StatsPeriod.ALL -> 14
+    }
+    val byDay = remember(buckets) { buckets.associateBy { it.dayStart } }
+    // Blank days are filled in so the chart always has a stable axis.
+    val days = remember(windowDays, today, byDay) {
+        (windowDays - 1 downTo 0).map { offset ->
+            val start = today - offset * dayMs
+            byDay[start] ?: DayBucket(dayStart = start)
+        }
+    }
+    val noStairsTotal = days.sumOf { it.noStairs }
+    val stairsTotal = days.sumOf { it.stairs }
+    val tick = remember { SimpleDateFormat("M/d", Locale.getDefault()) }
+    val weekday = remember { SimpleDateFormat("E", Locale.getDefault()) }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -364,24 +404,24 @@ private fun TrendCard(buckets: List<DayBucket>) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            if (buckets.isEmpty()) {
+            if (days.all { it.total == 0 }) {
                 Text(
                     text = "这个周期还没有记录。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                val maxTotal = maxOf(1, buckets.maxOf { it.total })
+                val maxTotal = maxOf(1, days.maxOf { it.total })
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp),
+                        .height(132.dp),
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    buckets.forEach { bucket ->
-                        val noStairH = bucket.noStairs.toFloat() / maxTotal * 120f
-                        val stairH = bucket.stairs.toFloat() / maxTotal * 120f
+                    days.forEach { bucket ->
+                        val noStairH = bucket.noStairs.toFloat() / maxTotal * 104f
+                        val stairH = bucket.stairs.toFloat() / maxTotal * 104f
                         Column(
                             modifier = Modifier.weight(1f),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -403,13 +443,25 @@ private fun TrendCard(buckets: List<DayBucket>) {
                                         .background(status.noStair, RoundedCornerShape(2.dp)),
                                 )
                             }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (windowDays <= 7) {
+                                    weekday.format(Date(bucket.dayStart)).take(1)
+                                } else {
+                                    tick.format(Date(bucket.dayStart))
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Legend(status.noStair, "免爬", 0, 0)
-                    Legend(status.stair, "要爬楼", 0, 0)
+                    Legend(status.noStair, "免爬", noStairsTotal, days.sumOf { it.total })
+                    Legend(status.stair, "要爬楼", stairsTotal, days.sumOf { it.total })
                 }
             }
         }
@@ -420,17 +472,22 @@ private fun TrendCard(buckets: List<DayBucket>) {
 private fun HeatmapCard(buckets: List<DayBucket>) {
     val status = LocalLouJiStatusColors.current
     val byDay = remember(buckets) { buckets.associateBy { it.dayStart } }
-    val formatter = remember { SimpleDateFormat("MM/dd", Locale.getDefault()) }
-    val count = 84
-    val today = remember {
-        java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 0)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
+    val formatter = remember { SimpleDateFormat("M月d日", Locale.getDefault()) }
+    val monthFormatter = remember { SimpleDateFormat("M月", Locale.getDefault()) }
     val dayMs = 24L * 60 * 60 * 1000
+    val today = startOfTodayMillis()
+    val weekdayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
+
+    // Monday-first calendar: 7 rows (weekdays) × 12 columns (weeks), newest week on the right.
+    val weekdayIndex = remember(today) {
+        val calendar = java.util.Calendar.getInstance().apply {
+            firstDayOfWeek = java.util.Calendar.MONDAY
+            timeInMillis = today
+        }
+        (calendar.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    }
+    val gridStart = today - (11 * 7 + weekdayIndex) * dayMs
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -439,11 +496,20 @@ private fun HeatmapCard(buckets: List<DayBucket>) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                for (week in 0 until 12) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        for (day in 0 until 7) {
-                            val index = week * 7 + day
-                            val dayStart = today - (count - 1 - index) * dayMs
+                for (day in 0 until 7) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Text(
+                            text = weekdayLabels[day],
+                            modifier = Modifier.width(16.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        for (week in 0 until 12) {
+                            val dayStart = gridStart + (week * 7 + day) * dayMs
                             val value = byDay[dayStart]?.total ?: 0
                             val alpha = when {
                                 value <= 0 -> 0.10f
@@ -465,12 +531,49 @@ private fun HeatmapCard(buckets: List<DayBucket>) {
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
+            Row {
+                Text(
+                    text = monthFormatter.format(Date(gridStart)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = monthFormatter.format(Date(today)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "从 ${formatter.format(Date(today - (count - 1) * dayMs))} 到今天 · 颜色越深出勤越多",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "少",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                listOf(0.10f, 0.30f, 0.50f, 0.72f, 1f).forEach { alpha ->
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(status.noStair.copy(alpha = alpha), RoundedCornerShape(2.dp)),
+                    )
+                }
+                Text(
+                    text = "多",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${formatter.format(Date(gridStart))} – 今天",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -87,7 +87,7 @@ fun AppLockScreen(onUnlocked: () -> Unit) {
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(androidx.compose.ui.graphics.Color(0xFF121517)),
+                    .background(androidx.compose.ui.graphics.Color(0xFF141923)),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
@@ -101,6 +101,7 @@ fun AppLockScreen(onUnlocked: () -> Unit) {
                 text = "楼记已锁定",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(8.dp))
             Text(

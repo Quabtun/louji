@@ -29,22 +29,40 @@ interface BuildingDao {
     @Query("SELECT * FROM building_profiles WHERE location = :location LIMIT 1")
     fun observeByLocation(location: String): Flow<BuildingProfileEntity?>
 
-    /** Exact match first, then prefix/contains, so typing "阳光花" can surface the profile. */
+    /**
+     * Exact match first, then records whose name starts with the query, then names contained in
+     * either direction (so "阳光花" finds "阳光花园" and "阳光花园3栋" finds "阳光花园").
+     */
     @Query(
         """
         SELECT * FROM building_profiles
         WHERE location = :query
            OR location LIKE :query || '%'
            OR location LIKE '%' || :query || '%'
+           OR :query LIKE '%' || location || '%'
         ORDER BY
             CASE WHEN location = :query THEN 0
                  WHEN location LIKE :query || '%' THEN 1
-                 ELSE 2 END,
+                 WHEN location LIKE '%' || :query || '%' THEN 2
+                 ELSE 3 END,
+            LENGTH(location) DESC,
             pinned DESC, updatedAt DESC
         LIMIT 1
         """,
     )
     suspend fun findBestMatch(query: String): BuildingProfileEntity?
+
+    /** Candidate duplicates for a merge: either name contains the other. */
+    @Query(
+        """
+        SELECT * FROM building_profiles
+        WHERE location != :location
+          AND (location LIKE :location || '%' OR :location LIKE '%' || location || '%')
+        ORDER BY LENGTH(location) ASC
+        LIMIT 10
+        """,
+    )
+    suspend fun findSimilar(location: String): List<BuildingProfileEntity>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIgnore(profile: BuildingProfileEntity): Long
@@ -94,9 +112,24 @@ interface BuildingDao {
             COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
             COALESCE(SUM(CASE WHEN noStairs = 'NO' THEN 1 ELSE 0 END), 0) AS stairs
         FROM records
-        WHERE deletedAt = 0 AND location != ''
+        WHERE archived = 0 AND deletedAt = 0 AND location != ''
         GROUP BY location
         """,
     )
     fun observeRankings(): Flow<List<BuildingRank>>
+
+    /** Same ranking, limited to a period so the insights screen can follow its selector. */
+    @Query(
+        """
+        SELECT location,
+            COUNT(*) AS total,
+            COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
+            COALESCE(SUM(CASE WHEN noStairs = 'NO' THEN 1 ELSE 0 END), 0) AS stairs
+        FROM records
+        WHERE archived = 0 AND deletedAt = 0 AND location != ''
+          AND createdAt >= :since AND createdAt < :until
+        GROUP BY location
+        """,
+    )
+    fun observeRankingsForRange(since: Long, until: Long): Flow<List<BuildingRank>>
 }

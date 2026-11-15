@@ -106,6 +106,8 @@ fun ImageAnnotationScreen(
     viewModel: AnnotationViewModel,
     attachmentId: Long,
     onClose: () -> Unit,
+    pendingSource: com.quabtun.louji.model.MediaDraft? = null,
+    onPendingAnnotated: (com.quabtun.louji.model.MediaDraft) -> Unit = {},
 ) {
     val attachment by viewModel.attachment.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
@@ -126,7 +128,9 @@ fun ImageAnnotationScreen(
     var circleRadius by remember { mutableStateOf(0f) }
     var showDoneConfirm by remember { mutableStateOf(false) }
 
-    LaunchedEffect(attachmentId) { viewModel.load(attachmentId) }
+    LaunchedEffect(attachmentId) {
+        if (pendingSource == null) viewModel.load(attachmentId)
+    }
     LaunchedEffect(message) {
         if (message != null) {
             viewModel.clearMessage()
@@ -134,13 +138,17 @@ fun ImageAnnotationScreen(
         }
     }
 
-    val file = attachment?.takeIf { it.type == com.quabtun.louji.model.MediaType.IMAGE }?.let {
-        File(it.filePath).takeIf { f -> f.isFile }
+    val file = if (pendingSource != null) {
+        File(pendingSource.filePath).takeIf { it.isFile }
+    } else {
+        attachment?.takeIf { it.type == com.quabtun.louji.model.MediaType.IMAGE }?.let {
+            File(it.filePath).takeIf { f -> f.isFile }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0B0E14))) {
         if (file == null) {
-            if (attachment == null) {
+            if (attachment == null && pendingSource == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 Text(
@@ -392,16 +400,23 @@ fun ImageAnnotationScreen(
         )
     }
 
-    if (showDoneConfirm && file != null && attachment != null) {
+    if (showDoneConfirm && file != null && (attachment != null || pendingSource != null)) {
         AlertDialog(
             onDismissRequest = { showDoneConfirm = false },
             title = { Text("保存标注图？") },
-            text = { Text("会把标注后的图片作为新附件加到这条记录。") },
+            text = {
+                Text(
+                    if (pendingSource != null) {
+                        "会替换这条待保存附件里的图片，分类保持不变。"
+                    } else {
+                        "会把标注后的图片作为新附件加到这条记录。"
+                    },
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showDoneConfirm = false
-                        val target = attachment!!
                         scope.launch {
                             val output = withContext(Dispatchers.IO) {
                                 runCatching {
@@ -413,10 +428,18 @@ fun ImageAnnotationScreen(
                                     )
                                 }.getOrNull()
                             }
-                            if (output == null) {
-                                onClose()
-                            } else {
-                                viewModel.saveAnnotated(target.recordId, output) { onClose() }
+                            when {
+                                output == null -> onClose()
+                                pendingSource != null -> {
+                                    viewModel.saveAnnotatedPending(pendingSource, output) {
+                                        onPendingAnnotated(it)
+                                    }
+                                }
+                                else -> {
+                                    viewModel.saveAnnotated(attachment!!.recordId, output) {
+                                        onClose()
+                                    }
+                                }
                             }
                         }
                     },

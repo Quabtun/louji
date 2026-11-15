@@ -134,8 +134,79 @@ class ClipboardOrderParserTest {
     }
 
     @Test
-    fun mapsDeliveryPreferencesAndRemarkHints() {
-        assertEquals(
+    fun splitsRoomImmediatelyAfterBuildingMarkerWithoutSeparator() {
+        val a = ClipboardOrderParser.parse("阳光花园3栋1804")
+        assertEquals("阳光花园3栋", a.location)
+        assertEquals("18", a.floor)
+        assertEquals("1804", a.roomNo)
+
+        val b = ClipboardOrderParser.parse("锦绣公寓B座702")
+        assertEquals("锦绣公寓B座", b.location)
+        assertEquals("7", b.floor)
+        assertEquals("702", b.roomNo)
+
+        val c = ClipboardOrderParser.parse("阳光花园3号楼2单元501")
+        assertEquals("阳光花园3号楼2单元", c.location)
+        assertEquals("5", c.floor)
+        assertEquals("501", c.roomNo)
+    }
+
+    @Test
+    fun keepsBuildingNumbersOutOfRooms() {
+        val parsed = ClipboardOrderParser.parse("阳光花园12号院3号楼")
+
+        assertNull(parsed.roomNo)
+        assertEquals("阳光花园12号院3号楼", parsed.location)
+    }
+
+    @Test
+    fun readsCrossLineLabelsWithoutColon() {
+        val parsed = ClipboardOrderParser.parse(
+            """
+            美团外卖
+            收货地址
+            江景苑 2 栋
+            订单号
+            D5566
+            房号
+            2103
+            """.trimIndent(),
+        )
+
+        assertEquals("江景苑 2 栋", parsed.location)
+        assertEquals("D5566", parsed.orderNo)
+        assertEquals("2103", parsed.roomNo)
+    }
+
+    @Test
+    fun toleratesOcrSpacesInsideLabelsAndNumbers() {
+        val parsed = ClipboardOrderParser.parse(
+            "收货地址：江景苑 2 栋 楼 层 ： 2 1 房 号 ： 2 1 0 3 尾 号 ： 4 8 2 1",
+        )
+
+        assertEquals("江景苑 2 栋", parsed.location)
+        assertEquals("21", parsed.floor)
+        assertEquals("2103", parsed.roomNo)
+        assertEquals("4821", parsed.phoneTail)
+    }
+
+    @Test
+    fun acceptsPrivacyMaskStarVariants() {
+        assertEquals("1234", ClipboardOrderParser.parse("138＊＊1234").phoneTail)
+        assertEquals("1234", ClipboardOrderParser.parse("138××1234").phoneTail)
+        assertEquals("1234", ClipboardOrderParser.parse("138••1234").phoneTail)
+        assertEquals("1234", ClipboardOrderParser.parse("138 **** 1234").phoneTail)
+    }
+
+    @Test
+    fun readsPlatformOrderIdentifiers() {
+        assertEquals("12", ClipboardOrderParser.parse("订单 #12").orderNo)
+        assertEquals("8899001122", ClipboardOrderParser.parse("流水号 8899001122").orderNo)
+        assertEquals("4455", ClipboardOrderParser.parse("取货码 4455").orderNo)
+    }
+
+    @Test
+    fun mapsDeliveryPreferencesAndRemarkHints() {        assertEquals(
             com.quabtun.louji.model.DeliveryMethod.LOCKER,
             ClipboardOrderParser.parse("放外卖柜").deliveryMethod,
         )

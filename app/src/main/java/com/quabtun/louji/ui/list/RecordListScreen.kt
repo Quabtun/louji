@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -162,11 +163,16 @@ fun RecordListScreen(
     viewModel: RecordListViewModel,
     onCreate: () -> Unit,
     onOpenDetail: (Long) -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenInsights: () -> Unit,
     onOpenBuilding: (String) -> Unit,
     onDuplicate: (Long) -> Unit,
-    onQuickEdit: (text: String?, imageUri: Uri?, message: String?) -> Unit,
+    onQuickEdit: (
+        text: String?,
+        imageUri: Uri?,
+        message: String?,
+        ocr: com.quabtun.louji.data.OcrResult?,
+        media: com.quabtun.louji.model.MediaDraft?,
+    ) -> Unit,
     focusSearch: Boolean = false,
 ) {
     val recordsPaged = viewModel.recordsPaged.collectAsLazyPagingItems()
@@ -183,6 +189,7 @@ fun RecordListScreen(
     val undoState by viewModel.undoState.collectAsStateWithLifecycle()
     val radar by viewModel.radar.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val pendingCount by viewModel.pendingCount.collectAsStateWithLifecycle()
     val autoSaveEnabled by viewModel.autoSaveEnabled.collectAsStateWithLifecycle()
     val quickSaving by viewModel.quickSaving.collectAsStateWithLifecycle()
     val quickEvent by viewModel.quickEvent.collectAsStateWithLifecycle()
@@ -226,7 +233,7 @@ fun RecordListScreen(
             if (autoSaveEnabled) {
                 viewModel.quickSaveImage(uri)
             } else {
-                onQuickEdit(null, uri, null)
+                onQuickEdit(null, uri, null, null, null)
             }
         }
     }
@@ -240,7 +247,7 @@ fun RecordListScreen(
         if (autoSaveEnabled) {
             viewModel.quickSaveText(text)
         } else {
-            onQuickEdit(text, null, null)
+            onQuickEdit(text, null, null, null, null)
         }
     }
 
@@ -257,7 +264,7 @@ fun RecordListScreen(
             }
             is QuickSaveEvent.Fallback -> {
                 viewModel.consumeQuickEvent()
-                onQuickEdit(event.text, event.imageUri, event.message)
+                onQuickEdit(event.text, event.imageUri, event.message, event.ocr, event.media)
             }
             null -> Unit
         }
@@ -274,16 +281,44 @@ fun RecordListScreen(
                 )
             },
             topBar = {
-                TopAppBar(
-                    title = {
+                // A self-sizing header instead of TopAppBar: at 2.0× font the fixed 64dp bar
+                // clipped the brand subtitle and collided with the action button.
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         if (selectionMode) {
+                            IconButton(
+                                onClick = viewModel::exitSelectionMode,
+                                modifier = Modifier.testTag("selection_cancel"),
+                            ) {
+                                Icon(Icons.Filled.Close, contentDescription = "退出多选")
+                            }
                             Text(
                                 text = "已选 ${selectedIds.size} 项",
+                                modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
+                            TextButton(
+                                onClick = {
+                                    viewModel.selectAll(
+                                        loadedRecords(usePaged, recordsPaged, fallbackRecords),
+                                    )
+                                },
+                                modifier = Modifier.testTag("select_all"),
+                            ) { Text("全选已加载") }
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .size(30.dp)
@@ -303,6 +338,7 @@ fun RecordListScreen(
                                         text = "楼记",
                                         style = MaterialTheme.typography.titleLarge,
                                         fontWeight = FontWeight.Black,
+                                        maxLines = 1,
                                     )
                                     Text(
                                         text = "本月 ${stats.total} 单 · 免爬 ${stats.rate()}%",
@@ -311,44 +347,17 @@ fun RecordListScreen(
                                             .clickable(onClick = onOpenInsights),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
                                     )
                                 }
                             }
-                        }
-                    },
-                    navigationIcon = {
-                        if (selectionMode) {
-                            IconButton(
-                                onClick = viewModel::exitSelectionMode,
-                                modifier = Modifier.testTag("selection_cancel"),
-                            ) {
-                                Icon(Icons.Filled.Close, contentDescription = "退出多选")
-                            }
-                        }
-                    },
-                    actions = {
-                        if (selectionMode) {
-                            TextButton(
-                                onClick = { viewModel.selectAll(loadedRecords(usePaged, recordsPaged, fallbackRecords)) },
-                                modifier = Modifier.testTag("select_all"),
-                            ) { Text("全选") }
-                        } else {
                             TextButton(
                                 onClick = viewModel::enterSelectionMode,
                                 modifier = Modifier.testTag("selection_mode"),
                             ) { Text("多选") }
-                            IconButton(
-                                onClick = onOpenSettings,
-                                modifier = Modifier.testTag("settings_button"),
-                            ) {
-                                Icon(Icons.Filled.Settings, contentDescription = "设置")
-                            }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    ),
-                )
+                    }
+                }
             },
         ) { padding ->
             Box(
@@ -395,7 +404,7 @@ fun RecordListScreen(
                                 ) {
                                     QuickActionTile(
                                         title = "截屏秒存",
-                                        caption = if (autoSaveEnabled) "OCR · 自动入库" else "OCR · 填入表单",
+                                        caption = if (autoSaveEnabled) "自动入库" else "填入表单",
                                         icon = R.drawable.ic_gallery,
                                         modifier = Modifier.weight(1f).testTag("quick_ocr"),
                                         onClick = {
@@ -408,7 +417,7 @@ fun RecordListScreen(
                                     )
                                     QuickActionTile(
                                         title = "粘贴秒存",
-                                        caption = if (autoSaveEnabled) "文本 · 自动入库" else "文本 · 填入表单",
+                                        caption = if (autoSaveEnabled) "自动入库" else "填入表单",
                                         icon = R.drawable.ic_export,
                                         modifier = Modifier.weight(1f).testTag("quick_paste"),
                                         onClick = { quickPaste() },
@@ -420,6 +429,7 @@ fun RecordListScreen(
                                     filter = filter,
                                     dateRange = dateRange,
                                     activeConditionCount = activeConditionCount,
+                                    pendingCount = pendingCount,
                                     onFilter = viewModel::setFilter,
                                     onOpenSheet = { showFilterSheet = true },
                                 )
@@ -452,6 +462,9 @@ fun RecordListScreen(
                                         onClear = {
                                             viewModel.setQuery("")
                                             viewModel.setFilter(RecordFilter.ALL)
+                                            viewModel.clearDateRange()
+                                            viewModel.setShowTrash(false)
+                                            viewModel.setSort(RecordSort.UPDATED)
                                         },
                                     )
                                 }
@@ -485,6 +498,9 @@ fun RecordListScreen(
                                     onClear = {
                                         viewModel.setQuery("")
                                         viewModel.setFilter(RecordFilter.ALL)
+                                        viewModel.clearDateRange()
+                                        viewModel.setShowTrash(false)
+                                        viewModel.setSort(RecordSort.UPDATED)
                                     },
                                 )
                             }
@@ -570,7 +586,7 @@ fun RecordListScreen(
                     }
                 },
             ) {
-                Text("✅ 已自动保存：${savedEvent.label}")
+                Text("已自动保存：${savedEvent.label}")
             }
         }
 
@@ -587,7 +603,8 @@ fun RecordListScreen(
                 onSort = viewModel::setSort,
                 onDate = viewModel::setDateRange,
                 onReset = {
-                    viewModel.setShowArchived(false)
+                    viewModel.setShowTrash(false)
+                    viewModel.setFilter(RecordFilter.ALL)
                     viewModel.setSort(RecordSort.UPDATED)
                     viewModel.clearDateRange()
                 },
@@ -762,7 +779,7 @@ private fun SearchField(
             .focusRequester(focusRequester)
             .semantics { contentDescription = "搜索位置、订单号、尾号、房号" }
             .testTag("search_field"),
-        placeholder = { Text("搜位置、尾号、房号、门禁密码") },
+        placeholder = { Text("搜位置、尾号、房号") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -776,7 +793,11 @@ private fun SearchField(
                     modifier = Modifier.testTag("paste_search"),
                     contentPadding = PaddingValues(horizontal = 8.dp),
                 ) {
-                    Text("📋", style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        painter = painterResource(R.drawable.ic_clipboard),
+                        contentDescription = "从剪贴板搜索",
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         },
@@ -795,6 +816,7 @@ private fun ChipRow(
     filter: RecordFilter,
     dateRange: DateRange,
     activeConditionCount: Int,
+    pendingCount: Int,
     onFilter: (RecordFilter) -> Unit,
     onOpenSheet: () -> Unit,
 ) {
@@ -808,7 +830,7 @@ private fun ChipRow(
             RecordFilter.STAIRS to "要爬楼",
             RecordFilter.NO_STAIRS to "免爬",
             RecordFilter.WILL_COME_DOWN to "会下楼",
-            RecordFilter.WARNING to "⚠️ 雷区",
+            RecordFilter.PENDING to "待确认" + if (pendingCount > 0) " $pendingCount" else "",
         ).forEach { (value, label) ->
             LouJiFilterChip(
                 selected = filter == value,
@@ -817,6 +839,22 @@ private fun ChipRow(
                 modifier = Modifier.testTag("filter_${value.name}"),
             )
         }
+        LouJiFilterChip(
+            selected = filter == RecordFilter.WARNING,
+            onClick = { onFilter(RecordFilter.WARNING) },
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("雷区")
+                }
+            },
+            modifier = Modifier.testTag("filter_${RecordFilter.WARNING.name}"),
+        )
         LouJiFilterChip(
             selected = activeConditionCount > 0 || dateRange.isActive,
             onClick = onOpenSheet,
@@ -990,22 +1028,28 @@ private fun FilterSheet(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val now = remember { System.currentTimeMillis() }
+                val presets = listOf(7, 30, 90)
+                val matchedPreset = presets.firstOrNull { days ->
+                    val preset = DateRangePresets.lastDays(now, days)
+                    dateRange.isActive && dateRange.start == preset.start &&
+                        dateRange.end == preset.end
+                }
+                val isCustom = dateRange.isActive && matchedPreset == null
                 LouJiFilterChip(
                     selected = !dateRange.isActive,
                     onClick = { onDate(DateRange()) },
                     label = { Text("全部") },
                 )
-                listOf(7 to "近7天", 30 to "近30天", 90 to "近90天").forEach { (days, label) ->
+                presets.forEach { days ->
                     LouJiFilterChip(
-                        selected = false,
-                        onClick = {
-                            onDate(DateRangePresets.lastDays(System.currentTimeMillis(), days))
-                        },
-                        label = { Text(label) },
+                        selected = matchedPreset == days,
+                        onClick = { onDate(DateRangePresets.lastDays(now, days)) },
+                        label = { Text("近${days}天") },
                     )
                 }
                 LouJiFilterChip(
-                    selected = false,
+                    selected = isCustom,
                     onClick = { showStartPicker = true },
                     label = { Text("自定义") },
                 )
@@ -1315,18 +1359,12 @@ private fun RecordCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!selectionMode) {
-                    TextButton(
-                        onClick = onOpen,
-                        modifier = Modifier.testTag("details_${record.id}"),
-                    ) {
-                        Icon(
-                            Icons.Filled.Info,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("详细信息", style = MaterialTheme.typography.labelSmall)
-                    }
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

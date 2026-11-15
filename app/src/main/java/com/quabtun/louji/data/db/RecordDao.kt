@@ -32,6 +32,7 @@ private const val FILTER_WHERE = """
         OR (:filter = 'NO_STAIRS' AND noStairs = 'YES')
         OR (:filter = 'WILL_COME_DOWN' AND willComeDown = 'YES')
         OR (:filter = 'WARNING' AND isWarning = 1)
+        OR (:filter = 'PENDING' AND noStairs = 'UNKNOWN')
     )
     AND archived = :archived
     AND deletedAt = 0
@@ -40,11 +41,11 @@ private const val FILTER_WHERE = """
 @Dao
 interface RecordDao {
     @Transaction
-    @Query("SELECT * FROM records ORDER BY createdAt DESC")
+    @Query("SELECT * FROM records ORDER BY updatedAt DESC, id DESC")
     fun observeAll(): Flow<List<RecordWithAttachments>>
 
     @Transaction
-    @Query(FILTER_WHERE + " ORDER BY createdAt DESC")
+    @Query(FILTER_WHERE + " ORDER BY updatedAt DESC, id DESC")
     fun observeFiltered(query: String, filter: String, archived: Int): Flow<List<RecordWithAttachments>>
 
     @Transaction
@@ -52,7 +53,7 @@ interface RecordDao {
         FILTER_WHERE +
             " AND (:startTime = 0 OR createdAt >= :startTime)" +
             " AND (:endTime = 0 OR createdAt < :endTime)" +
-            " ORDER BY createdAt DESC",
+            " ORDER BY updatedAt DESC, id DESC",
     )
     fun observeFilteredByDate(
         query: String,
@@ -67,7 +68,7 @@ interface RecordDao {
         FILTER_WHERE +
             " AND (:startTime = 0 OR createdAt >= :startTime)" +
             " AND (:endTime = 0 OR createdAt < :endTime)" +
-            " ORDER BY createdAt DESC, id DESC",
+            " ORDER BY updatedAt DESC, id DESC",
     )
     fun loadFilteredPagedSource(
         query: String,
@@ -78,6 +79,17 @@ interface RecordDao {
     ): androidx.paging.PagingSource<Int, RecordWithAttachments>
 
     @Transaction
+    @Query("UPDATE records SET location = :target, updatedAt = :updatedAt WHERE location = :source")
+    suspend fun renameLocation(source: String, target: String, updatedAt: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM records
+        WHERE archived = 0 AND deletedAt = 0 AND noStairs = 'UNKNOWN'
+        """,
+    )
+    fun observePendingCount(): Flow<Int>
+
     @Query("SELECT * FROM records WHERE deletedAt > 0 ORDER BY deletedAt DESC")
     fun observeTrashed(): Flow<List<RecordWithAttachments>>
 
@@ -118,9 +130,10 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN willComeDown = 'NO' THEN 1 ELSE 0 END), 0) AS wontComeDown
         FROM records
         WHERE archived = 0 AND deletedAt = 0
+          AND createdAt >= :since AND createdAt < :until
         """,
     )
-    fun observeDecisionStats(): Flow<DecisionStats>
+    fun observeDecisionStats(since: Long, until: Long): Flow<DecisionStats>
 
     @Query(
         """
@@ -130,12 +143,13 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown
         FROM records
         WHERE archived = 0 AND deletedAt = 0 AND location != ''
+          AND createdAt >= :since AND createdAt < :until
         GROUP BY location
         ORDER BY total DESC, location ASC
         LIMIT 20
         """,
     )
-    fun observeLocationStats(): Flow<List<LocationStat>>
+    fun observeLocationStats(since: Long, until: Long): Flow<List<LocationStat>>
 
     @Query(
         """
@@ -155,7 +169,7 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN willComeDown = 'YES' THEN 1 ELSE 0 END), 0) AS willComeDown,
             0 AS floorsClimbed
         FROM records
-        WHERE deletedAt = 0 AND createdAt >= :since AND createdAt < :until
+        WHERE archived = 0 AND deletedAt = 0 AND createdAt >= :since AND createdAt < :until
         """,
     )
     fun observeTotalsForRange(since: Long, until: Long): Flow<com.quabtun.louji.model.ClimbTotals>
@@ -163,7 +177,7 @@ interface RecordDao {
     @Query(
         """
         SELECT floor, createdAt FROM records
-        WHERE deletedAt = 0 AND noStairs = 'NO'
+        WHERE archived = 0 AND deletedAt = 0 AND noStairs = 'NO'
           AND createdAt >= :since AND createdAt < :until
         """,
     )
@@ -176,7 +190,7 @@ interface RecordDao {
             COALESCE(SUM(CASE WHEN noStairs = 'YES' THEN 1 ELSE 0 END), 0) AS noStairs,
             COALESCE(SUM(CASE WHEN noStairs = 'NO' THEN 1 ELSE 0 END), 0) AS stairs
         FROM records
-        WHERE deletedAt = 0 AND createdAt >= :since
+        WHERE archived = 0 AND deletedAt = 0 AND createdAt >= :since
         GROUP BY dayStart
         ORDER BY dayStart ASC
         """,

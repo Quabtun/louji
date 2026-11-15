@@ -1,8 +1,12 @@
 package com.quabtun.louji.ui.building
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,15 +21,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -51,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -59,8 +68,11 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.quabtun.louji.R
 import com.quabtun.louji.data.db.BuildingProfileEntity
 import com.quabtun.louji.data.db.RecordWithAttachments
@@ -89,6 +101,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun BuildingDetailScreen(
     viewModel: BuildingViewModel,
+    mediaStore: com.quabtun.louji.data.LocalMediaStore,
     location: String,
     onBack: () -> Unit,
     onOpenRecord: (Long) -> Unit,
@@ -97,13 +110,31 @@ fun BuildingDetailScreen(
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val records by viewModel.locationRecords.collectAsStateWithLifecycle()
+    val similar by viewModel.similarBuildings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showEdit by remember { mutableStateOf(false) }
     var showShare by remember { mutableStateOf(false) }
     var includeCode by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showMerge by remember { mutableStateOf(false) }
+    var coverPreview by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(location) { viewModel.load(location) }
+
+    val coverLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val media = withContext(Dispatchers.IO) {
+                    runCatching { mediaStore.importFromUri(uri) }.getOrNull()
+                }
+                if (media != null) viewModel.setCover(media.filePath)
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.testTag("building_detail").semantics { testTagsAsResourceId = true },
@@ -139,6 +170,37 @@ fun BuildingDetailScreen(
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = "分享攻略卡")
                     }
+                    Box {
+                        IconButton(
+                            onClick = {
+                                viewModel.loadSimilar()
+                                showMenu = true
+                            },
+                            modifier = Modifier.testTag("building_more"),
+                        ) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("合并到其他楼栋") },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.loadSimilar()
+                                    showMerge = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("删除楼栋攻略") },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteConfirm = true
+                                },
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -169,6 +231,71 @@ fun BuildingDetailScreen(
                         shape = RoundedCornerShape(12.dp),
                     ) { Text("创建楼栋攻略") }
                 } else {
+
+                val cover = current.coverPhotoPath?.takeIf { java.io.File(it).isFile }
+                SectionHeader("入口实景")
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        if (cover != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(java.io.File(cover))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "楼栋入口实景",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { coverPreview = cover }
+                                    .testTag("building_cover"),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        } else {
+                            Text(
+                                text = "拍一张入口/门禁实景，下次到楼下先看图再找门。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    coverLauncher.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                                modifier = Modifier.testTag("building_cover_pick"),
+                                shape = RoundedCornerShape(10.dp),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_gallery),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (cover == null) "设置封面" else "更换封面")
+                            }
+                            if (cover != null) {
+                                TextButton(
+                                    onClick = { viewModel.setCover(null) },
+                                    modifier = Modifier.testTag("building_cover_remove"),
+                                ) { Text("删除封面") }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
 
                 SectionHeader("楼栋通行档案")
                 Spacer(Modifier.height(10.dp))
@@ -312,6 +439,82 @@ fun BuildingDetailScreen(
                 viewModel.save(updated)
             },
         )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除楼栋攻略？") },
+            text = { Text("只删除这份固定通行信息，历史记录仍会保留。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        viewModel.delete(onDeleted = onBack)
+                    },
+                    modifier = Modifier.testTag("building_delete_confirm"),
+                ) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showMerge) {
+        AlertDialog(
+            onDismissRequest = { showMerge = false },
+            title = { Text("合并到其他楼栋") },
+            text = {
+                Column {
+                    Text(
+                        "把当前楼栋的历史记录归到目标楼栋，并删除重复的楼栋档案。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (similar.isEmpty()) {
+                        Text("没有找到名称相近的楼栋。")
+                    } else {
+                        similar.forEach { candidate ->
+                            TextButton(
+                                onClick = {
+                                    showMerge = false
+                                    viewModel.mergeInto(candidate.location)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    candidate.location,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showMerge = false }) { Text("取消") }
+            },
+        )
+    }
+
+    coverPreview?.let { path ->
+        Dialog(onDismissRequest = { coverPreview = null }) {
+            AsyncImage(
+                model = java.io.File(path),
+                contentDescription = "入口实景大图",
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { coverPreview = null },
+            )
+        }
     }
 
     if (showShare && profile != null) {

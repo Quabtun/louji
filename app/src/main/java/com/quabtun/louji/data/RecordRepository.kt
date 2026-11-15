@@ -72,8 +72,11 @@ class RecordRepository(
 
     fun observeStats(): Flow<RecordStats> = recordDao.observeStats(startOfMonth(clock()))
 
-    fun observeInsights(): Flow<RecordInsights> =
-        combine(recordDao.observeDecisionStats(), recordDao.observeLocationStats()) { decision, locations ->
+    fun observeInsights(since: Long = 0L, until: Long = Long.MAX_VALUE): Flow<RecordInsights> =
+        combine(
+            recordDao.observeDecisionStats(since, until),
+            recordDao.observeLocationStats(since, until),
+        ) { decision, locations ->
             RecordInsights(decision = decision, locations = locations)
         }
 
@@ -260,11 +263,14 @@ class RecordRepository(
 
     suspend fun clearAll() {
         val attachments = attachmentDao.getAllOnce()
+        val covers = buildingDao.allOnce().mapNotNull { it.coverPhotoPath }
         database.withTransaction {
             attachmentDao.deleteAll()
             recordDao.deleteAll()
+            buildingDao.deleteAll()
         }
         attachments.forEach { mediaStore.deleteAttachment(it.filePath, it.thumbPath) }
+        covers.forEach { mediaStore.deleteAttachment(it, null) }
     }
 
     suspend fun duplicateDraft(id: Long): RecordDraft? {
@@ -298,6 +304,7 @@ class RecordRepository(
             paths += attachment.filePath
             attachment.thumbPath?.let(paths::add)
         }
+        buildingDao.allOnce().mapNotNullTo(paths) { it.coverPhotoPath }
         return paths
     }
 
@@ -326,6 +333,7 @@ class RecordRepository(
                         sizeBytes = draft.sizeBytes,
                         durationMs = draft.durationMs,
                         createdAt = createdAt + index,
+                        category = draft.category,
                     )
                 },
             )
@@ -359,6 +367,7 @@ class RecordRepository(
                             sizeBytes = draft.sizeBytes,
                             durationMs = draft.durationMs,
                             createdAt = createdAt + index,
+                            category = draft.category,
                         )
                     },
                 )
@@ -385,6 +394,11 @@ class RecordRepository(
     /** Imports building profiles; with [replaceAll] the local library is replaced first. */
     suspend fun importBuildings(items: List<BuildingProfileEntity>, replaceAll: Boolean) {
         if (items.isEmpty() && !replaceAll) return
+        val replacedCovers = if (replaceAll) {
+            buildingDao.allOnce().mapNotNull { it.coverPhotoPath }
+        } else {
+            emptyList()
+        }
         database.withTransaction {
             if (replaceAll) buildingDao.deleteAll()
             items.forEach { profile ->
@@ -398,6 +412,7 @@ class RecordRepository(
                 }
             }
         }
+        replacedCovers.forEach { mediaStore.deleteAttachment(it, null) }
     }
 
     fun observeBuildings(): Flow<List<BuildingProfileEntity>> = buildingDao.observeAll()
@@ -414,6 +429,11 @@ class RecordRepository(
         return buildingDao.findBestMatch(trimmed)
     }
 
+    suspend fun findSimilarBuildings(location: String): List<BuildingProfileEntity> =
+        location.trim().takeIf { it.length >= 2 }
+            ?.let { buildingDao.findSimilar(it) }
+            .orEmpty()
+
     fun observeBuildingStats(location: String): Flow<BuildingStats> =
         buildingDao.observeStats(location)
 
@@ -421,6 +441,9 @@ class RecordRepository(
         buildingDao.statsOnce(location)
 
     fun observeBuildingRankings(): Flow<List<BuildingRank>> = buildingDao.observeRankings()
+
+    fun observeBuildingRankingsForRange(since: Long, until: Long): Flow<List<BuildingRank>> =
+        buildingDao.observeRankingsForRange(since, until)
 
     suspend fun saveBuilding(profile: BuildingProfileEntity) {
         val existing = buildingDao.findByLocation(profile.location)
@@ -438,8 +461,49 @@ class RecordRepository(
     }
 
     suspend fun deleteBuilding(id: Long) {
+        val cover = buildingDao.findById(id)?.coverPhotoPath
         buildingDao.deleteById(id)
+        cover?.let { mediaStore.deleteAttachment(it, null) }
     }
+
+    /**
+     * Folds a duplicate building guide into [target]: its records are renamed to the target, the
+     * target keeps its own fields but picks up the source cover when it has none, and the source
+     * row (plus any now-unused cover file) is removed.
+     */
+    suspend fun mergeBuildings(sourceLocation: String, targetLocation: String) {
+        val source = sourceLocation.trim()
+        val target = targetLocation.trim()
+        if (source.isEmpty() || target.isEmpty() || source == target) return
+        val sourceProfile = buildingDao.findByLocation(source) ?: return
+        val targetProfile = buildingDao.findByLocation(target)
+        database.withTransaction {
+            recordDao.renameLocation(source, target, clock())
+            if (targetProfile == null) {
+                buildingDao.update(
+                    sourceProfile.copy(location = target, updatedAt = clock()),
+                )
+            } else {
+                if (targetProfile.coverPhotoPath == null && sourceProfile.coverPhotoPath != null) {
+                    buildingDao.update(
+                        targetProfile.copy(
+                            coverPhotoPath = sourceProfile.coverPhotoPath,
+                            updatedAt = clock(),
+                        ),
+                    )
+                }
+                buildingDao.deleteById(sourceProfile.id)
+            }
+        }
+        if (targetProfile != null && sourceProfile.coverPhotoPath != null &&
+            targetProfile.coverPhotoPath != null
+        ) {
+            // The source cover is no longer referenced after the merge.
+            mediaStore.deleteAttachment(sourceProfile.coverPhotoPath, null)
+        }
+    }
+
+    fun observePendingCount(): Flow<Int> = recordDao.observePendingCount()
 
     suspend fun setBuildingPinned(id: Long, pinned: Boolean) {
         buildingDao.setPinned(id, pinned, clock())
