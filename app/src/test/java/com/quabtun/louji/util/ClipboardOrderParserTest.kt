@@ -206,6 +206,24 @@ class ClipboardOrderParserTest {
     }
 
     @Test
+    fun parsesMixedChineseAndDigitsLayout() {
+        val parsed = ClipboardOrderParser.parse(
+            "美团外卖 #18\n江景苑2栋1804室 王女士 138＊＊4821 21层 D5566 送到门口",
+        )
+
+        assertEquals("江景苑2栋", parsed.location)
+        assertEquals("1804", parsed.roomNo)
+        assertEquals("21", parsed.floor)
+        assertEquals("4821", parsed.phoneTail)
+        assertEquals("18", parsed.orderNo)
+        assertEquals(Gender.FEMALE, parsed.gender)
+        assertEquals(
+            com.quabtun.louji.model.DeliveryMethod.DOORSTEP,
+            parsed.deliveryMethod,
+        )
+    }
+
+    @Test
     fun mapsDeliveryPreferencesAndRemarkHints() {        assertEquals(
             com.quabtun.louji.model.DeliveryMethod.LOCKER,
             ClipboardOrderParser.parse("放外卖柜").deliveryMethod,

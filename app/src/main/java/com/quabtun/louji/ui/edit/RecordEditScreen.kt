@@ -140,6 +140,7 @@ fun RecordEditScreen(
     var cameraVideo by remember { mutableStateOf(false) }
     var locationRequestId by remember { mutableIntStateOf(0) }
     var isLocating by remember { mutableStateOf(false) }
+    var coordinateHint by remember { mutableStateOf<String?>(null) }
     var pendingPaste by remember { mutableStateOf<ParsedOrder?>(null) }
     var pendingFillLabel by remember { mutableStateOf("剪贴板") }
     var showCategorySheetFor by remember { mutableStateOf<Long?>(null) }
@@ -164,10 +165,15 @@ fun RecordEditScreen(
         isLocating = true
         try {
             when (val result = LocationHelper.currentPlace(context)) {
-                is LocationHelper.Result.Success -> viewModel.setLocation(result.place)
-                is LocationHelper.Result.CoordinatesOnly -> snackbar.showSnackbar(
-                    "暂未获取到中文地名，请手动输入或选常用位置（坐标参考 ${result.label}）",
-                )
+                is LocationHelper.Result.Success -> {
+                    coordinateHint = null
+                    viewModel.setLocation(result.place)
+                }
+                is LocationHelper.Result.CoordinatesOnly -> {
+                    // Keep the coordinates visible as a reference without polluting the field.
+                    coordinateHint = result.label
+                    snackbar.showSnackbar("暂未获取到中文地名，请手动输入或选常用位置")
+                }
                 LocationHelper.Result.PermissionMissing ->
                     snackbar.showSnackbar("没有定位权限，手动填写位置即可")
                 LocationHelper.Result.LocationDisabled ->
@@ -602,6 +608,12 @@ fun RecordEditScreen(
                                 )
                             }
                         }
+                    }
+                    coordinateHint?.let { hint ->
+                        Spacer(Modifier.height(8.dp))
+                        InfoBanner(
+                            text = "暂未获取到中文地名，坐标参考 $hint；可手动填写或点上方常用位置。",
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -108,7 +108,7 @@ object ClipboardOrderParser {
         RegexOption.IGNORE_CASE,
     )
     private val roomDashed = Regex("""(?<![\dA-Za-z])([A-Za-z]?\d{1,3}-\d{3,4})(?![\dA-Za-z])""")
-    private val roomSuffix = Regex("""(\d{3,4})\s*(?:室|号房)\s*$""")
+    private val roomSuffix = Regex("""(\d{3,4})\s*(?:室|号房)""")
     private val trailingRoomDigits = Regex("""(\d{3,4})\s*$""")
     private val buildingMarker = Regex("""(栋|号楼|座|单元|层|楼)""")
     private val maleWords = Regex("""先生|男士|帅哥""")
@@ -134,7 +134,9 @@ object ClipboardOrderParser {
     /** Label markers that end the location part, tolerant of OCR spacing inside the label. */
     private val locationStopLabel = Regex(
         "尾\\s*号|手\\s*机|电\\s*话|楼\\s*层|房\\s*号|房\\s*间|订\\s*单|分\\s*机|备\\s*注" +
-            "|查看地图|拨打电话|打电话|导航|联系顾客|联系商家|复制|呼叫",
+            "|查看地图|拨打电话|打电话|导航|联系顾客|联系商家|复制|呼叫" +
+            "|先生|女士|小姐|1[3-9]\\d{9}|1[3-9][\\s*＊×•·]{2,}\\d{4}" +
+            "|\\d{3,4}\\s*(?:室|号房)",
     )
 
     fun parse(raw: String): ParsedOrder {
@@ -145,13 +147,14 @@ object ClipboardOrderParser {
         val lines = mergeLabelLines(text.lines().map { it.trim() }.filter { it.isNotEmpty() })
         val normalized = lines.joinToString("\n")
         val address = splitAddress(parseRawLocation(lines))
+        val room = parseRoom(normalized) ?: address.roomNo
         return ParsedOrder(
             location = address.location,
             orderNo = parseOrderNo(normalized),
             phoneTail = parsePhoneTail(normalized),
             phoneExt = parsePhoneExt(normalized),
-            floor = parseFloor(normalized) ?: address.floor,
-            roomNo = parseRoom(normalized) ?: address.roomNo,
+            floor = parseFloor(normalized) ?: address.floor ?: deriveFloor(room),
+            roomNo = room,
             gender = parseGender(normalized),
             deliveryMethod = parseDelivery(normalized),
             remarkHint = parseRemarkHint(normalized),
@@ -357,6 +360,13 @@ object ClipboardOrderParser {
             ?: roomDashed.find(text)?.groupValues?.getOrNull(1)
             ?: roomSuffix.find(text)?.groupValues?.getOrNull(1)
 
+    /** 1804 → 18, 702 → 7, 501 → 5. */
+    private fun deriveFloor(room: String?): String? {
+        val digits = room?.let { Regex("""\d{3,4}""").find(it)?.value } ?: return null
+        val derived = digits.dropLast(2).toIntOrNull() ?: return null
+        return derived.takeIf { it in 1..99 }?.toString()
+    }
+
     private fun parseGender(text: String): Gender? = when {
         maleWords.containsMatchIn(text) -> Gender.MALE
         femaleWords.containsMatchIn(text) -> Gender.FEMALE
@@ -369,8 +379,8 @@ object ClipboardOrderParser {
             DeliveryMethod.LOCKER
         Regex("""下楼拿|下来拿|下楼取|下来取|下楼来拿""").containsMatchIn(text) ->
             DeliveryMethod.COME_DOWN
-        Regex("""放门口|放鞋架|挂门把|门把手|放门边|放地上""").containsMatchIn(text) ->
-            DeliveryMethod.DOORSTEP
+        Regex("""放门口|放鞋架|挂门把|门把手|放门边|放地上|送到门口|送至门口""")
+            .containsMatchIn(text) -> DeliveryMethod.DOORSTEP
         Regex("""当面交|当面给|亲手交|当面""").containsMatchIn(text) ->
             DeliveryMethod.HAND_TO_HAND
         else -> null

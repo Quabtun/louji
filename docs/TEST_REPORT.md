@@ -9,7 +9,7 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 76 / 76 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| JVM 单元测试 | 77 / 77 通过 | `app/build/reports/tests/testDebugUnitTest/` |
 | 仪器化测试（API 35） | 58 / 58 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26/24） | DAO + 迁移（含 5→6）+ 备份加密 各 25 / 25 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
@@ -311,7 +311,7 @@
 
 ## 11. v2.2.0 OCR 与数据修复验证补充（2026-11-15）
 
-- `ClipboardOrderParserTest` 新增 6 项：单行带标签文本、`3栋1804`/`B座702`/`2单元501` 无分隔拆分、`12号院3号楼` 不误拆、跨行无冒号标签、`尾 号 ： 4 8 2 1` 空格噪声、`＊/×/•` 掩码与 `#12`/流水号/取货码。
+- `ClipboardOrderParserTest` 新增 7 项：单行带标签文本、`3栋1804`/`B座702`/`2单元501` 无分隔拆分、`12号院3号楼` 不误拆、跨行无冒号标签、`尾 号 ： 4 8 2 1` 空格噪声、`＊/×/•` 掩码与 `#12`/流水号/取货码、中文+数字混乱单行排版。
 - `OcrLineComposerTest`（4 项）：同一视觉行按左到右单空格拼接、重叠分块重复行去重、不产生双空格/制表符、不同行保持分离。
 - `OcrTilePlanTest`（5 项）：短图单页、长图重叠分块且覆盖整图、超长图受最大块数限制、空图无块。
 - `AppLockControllerTest` 新增 2 项：解锁后写入无关设置（主题/更新/备份/自动保存）不重锁；从设置开启应用锁保持当前会话解锁、退到后台仍会锁。
@@ -320,4 +320,4 @@
 - `StatsPeriodTest`：`StatsViewModel` 切到「今日」只统计当天，「全部」含历史但排除归档，排行榜同步。
 - `RecordEditViewModelTest`：无扩展名/无 MIME 的 Photo Picker URI 仍能导入并把首图标记为 `ORDER_SCREENSHOT`；纯白无文字截图 OCR 失败后依然挂图。
 - 手工 UI 走查：1.0× 浅色首页/洞察（`v2.2-home-light.png`、`v2.2-insights-light.png`）、1.3× 引导（`v2.2-home-1.3x.png`）、2.0× 深色首页（`v2.2-home-dark-2x.png`）与表单（`v2.2-edit-2x.png`）；修复引导页标题黑字不可读、首页顶栏 2.0× 裁切、三联工具卡与决策选项换行截断。
-- 全量结果：JVM 76 / 76，API 35 仪器化 58 / 58，Lint 0 error（32 warning），`:app:assembleDebug` 通过。
+- 全量结果：JVM 77 / 77，API 35 仪器化 58 / 58，Lint 0 error（32 warning），`:app:assembleDebug` 通过。
