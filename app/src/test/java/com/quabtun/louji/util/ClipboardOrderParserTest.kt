@@ -206,6 +206,15 @@ class ClipboardOrderParserTest {
     }
 
     @Test
+    fun mergedVisualRowKeepsAddressWhenRoomLabelFollows() {
+        val parsed = ClipboardOrderParser.parse("收货地址 江景苑2栋 房号2103")
+
+        assertEquals("江景苑2栋", parsed.location)
+        assertEquals("2103", parsed.roomNo)
+        assertEquals("21", parsed.floor)
+    }
+
+    @Test
     fun parsesMixedChineseAndDigitsLayout() {
         val parsed = ClipboardOrderParser.parse(
             "美团外卖 #18\n江景苑2栋1804室 王女士 138＊＊4821 21层 D5566 送到门口",

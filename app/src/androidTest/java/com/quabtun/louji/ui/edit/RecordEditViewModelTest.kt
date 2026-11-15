@@ -2,7 +2,9 @@ package com.quabtun.louji.ui.edit
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -104,15 +106,81 @@ class RecordEditViewModelTest {
             state.pendingMedia.single().category,
         )
         assertTrue(File(state.pendingMedia.single().filePath).isFile)
-        assertTrue(state.ocrLines.isEmpty() || state.recognizedFields.isEmpty())
+        // A blank image must not invent OCR lines or parsed fields.
+        assertTrue(state.ocrLines.isEmpty())
+        assertTrue(state.recognizedFields.isEmpty())
+    }
+
+    @Test
+    fun unrelatedChineseTextKeepsOcrLinesForManualPick() = runBlocking {
+        val image = File(root, "unrelated.png").apply {
+            writeBytes(textPng("今日特价 18 元 牛肉面"))
+        }
+
+        viewModel.recognizeImage(Uri.fromFile(image), attach = true)
+
+        val state = withTimeout(180_000) {
+            viewModel.ui.first { !it.recognizing && it.ocrLines.isNotEmpty() }
+        }
+        assertEquals(1, state.pendingMedia.size)
+        assertEquals(
+            AttachmentCategory.ORDER_SCREENSHOT,
+            state.pendingMedia.single().category,
+        )
+        // Unrelated text parses to no order fields, but the raw OCR lines survive for the picker.
+        assertTrue(state.recognizedFields.isEmpty())
+        val line = state.ocrLines.first { it.contains("18") }
+        assertTrue(line.isNotBlank())
+
+        viewModel.applyOcrLine(line, OcrField.ROOM)
+        assertEquals("18", viewModel.ui.value.draft.roomNo)
+    }
+
+    @Test
+    fun parsedOcrDefersTheWriteSoTheUiCanConfirmOverwrites() = runBlocking {
+        viewModel.setLocation("旧小区")
+        val image = File(root, "order-text.png").apply {
+            writeBytes(textPng("收货地址 江景苑2栋 房号2103"))
+        }
+        var handed: com.quabtun.louji.util.ParsedOrder? = null
+
+        viewModel.recognizeImage(Uri.fromFile(image), attach = true) { handed = it }
+
+        withTimeout(180_000) {
+            viewModel.ui.first { !it.recognizing && handed != null }
+        }
+        assertEquals(handed?.summary(), "江景苑2栋", handed?.location)
+        assertEquals(handed?.summary(), "2103", handed?.roomNo)
+        // The caller owns the write now: the existing location must survive until the shared
+        // overwrite dialog is confirmed.
+        assertEquals("旧小区", viewModel.ui.value.draft.location)
     }
 
     private fun whitePng(): ByteArray {
         val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
+        return bitmap.toPngBytes()
+    }
+
+    /** Renders readable text so the real ML Kit pipeline has something to recognise. */
+    private fun textPng(text: String): ByteArray {
+        val bitmap = Bitmap.createBitmap(960, 280, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+        val paint = Paint().apply {
+            color = Color.BLACK
+            textSize = 68f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        canvas.drawText(text, 40f, 170f, paint)
+        return bitmap.toPngBytes()
+    }
+
+    private fun Bitmap.toPngBytes(): ByteArray {
         val output = java.io.ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-        bitmap.recycle()
+        compress(Bitmap.CompressFormat.PNG, 100, output)
+        recycle()
         return output.toByteArray()
     }
 }

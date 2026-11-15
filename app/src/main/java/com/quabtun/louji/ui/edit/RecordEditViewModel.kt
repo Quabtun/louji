@@ -346,8 +346,18 @@ class RecordEditViewModel(
         _ui.update { it.copy(message = null) }
     }
 
-    /** OCR a screenshot, attach it as the order screenshot and fill whatever parsed cleanly. */
-    fun recognizeImage(uri: Uri, attach: Boolean = true) {
+    /**
+     * OCR a screenshot, attach it as the order screenshot and fill whatever parsed cleanly.
+     *
+     * When [onParsed] is provided the caller owns the write (so the UI can show one shared
+     * overwrite confirmation for clipboard, OCR and voice); the parsed fields are not applied
+     * here.
+     */
+    fun recognizeImage(
+        uri: Uri,
+        attach: Boolean = true,
+        onParsed: ((com.quabtun.louji.util.ParsedOrder) -> Unit)? = null,
+    ) {
         viewModelScope.launch {
             _ui.update { it.copy(recognizing = true, message = null) }
             // The screenshot is attached first: a failed parse must never lose the rider's image.
@@ -394,6 +404,18 @@ class RecordEditViewModel(
                             (importFailure?.let { "（$it）" } ?: ""),
                     )
                 }
+                return@launch
+            }
+            if (onParsed != null) {
+                _ui.update {
+                    it.copy(
+                        recognizing = false,
+                        recognizedFields = parsed.labels(),
+                        ocrLines = result.visualLines,
+                        message = "已识别 ${parsed.labels().size} 项，确认后填入",
+                    )
+                }
+                onParsed(parsed)
                 return@launch
             }
             updateDraft { mergedWith(parsed) }
@@ -457,8 +479,17 @@ class RecordEditViewModel(
 
     fun applyVoiceText(text: String) {
         val parsed = ClipboardOrderParser.parse(text)
+        updateDraft { mergedWith(parsed, onlyBlank = false) }
+        applyVoiceRemarks(text)
+    }
+
+    /**
+     * Voice-only extras: climb hints and the spoken text itself. Kept separate from field filling
+     * so the edit screen can confirm field overwrites first and then append the remark.
+     */
+    fun applyVoiceRemarks(text: String) {
         updateDraft {
-            var next = mergedWith(parsed, onlyBlank = false)
+            var next = this
             val lower = text
             if (Regex("免爬|不用爬|电梯直达|放外卖柜").containsMatchIn(lower)) {
                 next = next.copy(noStairs = TriState.YES)

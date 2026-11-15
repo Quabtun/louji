@@ -199,9 +199,13 @@ class OrderTextRecognizer(
 
     private fun loadPages(uri: Uri): List<Page> {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use {
+        val boundsStream = context.contentResolver.openInputStream(uri)
+            ?: throw IOException("open failed")
+        boundsStream.use {
+            // With inJustDecodeBounds the decode intentionally returns null; only the bounds
+            // out-params matter, so readability is proven by the stream above.
             BitmapFactory.decodeStream(it, null, bounds)
-        } ?: throw IOException("open failed")
+        }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
             throw IOException("empty image")
         }

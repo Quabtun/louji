@@ -204,12 +204,12 @@ object ClipboardOrderParser {
                 addressKeyword.containsMatchIn(line) &&
                 !line.contains("订单") &&
                 !line.contains("尾号") &&
-                !line.contains("房号") &&
-                !line.contains("备注") &&
                 !phoneNumber.containsMatchIn(line) &&
                 !nonAddressLine.containsMatchIn(line) &&
                 !isNoiseLine(line)
             ) {
+                // A merged OCR row may contain "小区3栋 … 房号2103" on one line; cleanLocation
+                // cuts at the room label, so excluding such rows here would lose the address.
                 cleanLocation(line)?.let { return it }
             }
         }

@@ -143,6 +143,8 @@ fun RecordEditScreen(
     var coordinateHint by remember { mutableStateOf<String?>(null) }
     var pendingPaste by remember { mutableStateOf<ParsedOrder?>(null) }
     var pendingFillLabel by remember { mutableStateOf("剪贴板") }
+    var pendingDiff by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingAfterApply by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showCategorySheetFor by remember { mutableStateOf<Long?>(null) }
     var showPendingCategoryFor by remember { mutableStateOf<Int?>(null) }
     var voiceFailed by remember { mutableStateOf(false) }
@@ -188,6 +190,30 @@ fun RecordEditScreen(
         }
     }
 
+    /**
+     * One shared write path for clipboard, OCR and voice. Existing fields only trigger the
+     * overwrite dialog when the incoming value actually differs, so the rider sees a real diff.
+     */
+    fun requestApply(
+        parsed: ParsedOrder,
+        label: String,
+        afterApply: (() -> Unit)? = null,
+    ) {
+        val diff = ui.draft.pendingDiff(parsed)
+        if (diff.isEmpty()) {
+            viewModel.applyParsed(parsed, overwrite = true)
+            afterApply?.invoke()
+            scope.launch {
+                snackbar.showSnackbar("已从${label}填入：${parsed.labels().joinToString("、")}")
+            }
+            return
+        }
+        pendingFillLabel = label
+        pendingDiff = diff
+        pendingAfterApply = afterApply
+        pendingPaste = parsed
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
@@ -204,7 +230,15 @@ fun RecordEditScreen(
     ) { uris -> viewModel.importUris(uris) }
     val ocrLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> uri?.let { viewModel.recognizeImage(it, attach = true) } }
+    ) { uri ->
+        uri?.let {
+            viewModel.recognizeImage(
+                uri = it,
+                attach = true,
+                onParsed = { parsed -> requestApply(parsed, "识图") },
+            )
+        }
+    }
     val voiceLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
@@ -213,7 +247,14 @@ fun RecordEditScreen(
                 ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 ?.firstOrNull()
             if (!text.isNullOrBlank()) {
-                viewModel.applyVoiceText(text)
+                val parsed = ClipboardOrderParser.parse(text)
+                if (parsed.isEmpty) {
+                    // Pure free-form note: nothing to overwrite, just keep the spoken text.
+                    viewModel.applyVoiceRemarks(text)
+                    scope.launch { snackbar.showSnackbar("已记录语音内容") }
+                } else {
+                    requestApply(parsed, "语音") { viewModel.applyVoiceRemarks(text) }
+                }
             }
         }
     }
@@ -247,18 +288,7 @@ fun RecordEditScreen(
             scope.launch { snackbar.showSnackbar("没识别到订单信息，可手动填写") }
             return
         }
-        val hasExisting = ui.draft.location.isNotBlank() ||
-            ui.draft.orderNo.isNotBlank() ||
-            ui.draft.phoneTail.isNotBlank() ||
-            ui.draft.floor.isNotBlank() ||
-            ui.draft.roomNo.isNotBlank()
-        if (hasExisting) {
-            pendingFillLabel = "剪贴板"
-            pendingPaste = parsed
-        } else {
-            viewModel.applyParsed(parsed, overwrite = true)
-            scope.launch { snackbar.showSnackbar("已从剪贴板填入：${parsed.labels().joinToString("、")}") }
-        }
+        requestApply(parsed, "剪贴板")
     }
 
     LaunchedEffect(autoPaste, ui.initialized) {
@@ -1068,21 +1098,47 @@ fun RecordEditScreen(
 
     pendingPaste?.let { parsed ->
         AlertDialog(
-            onDismissRequest = { pendingPaste = null },
-            title = { Text("用${pendingFillLabel}填入？") },
-            text = { Text("会覆盖已填写的对应字段：\n\n${parsed.summary()}") },
+            onDismissRequest = {
+                pendingPaste = null
+                pendingAfterApply = null
+            },
+            title = { Text("用${pendingFillLabel}覆盖已填字段？") },
+            text = {
+                Column {
+                    Text(
+                        text = "以下字段会被替换：",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    pendingDiff.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val after = pendingAfterApply
                         pendingPaste = null
+                        pendingAfterApply = null
+                        pendingDiff = emptyList()
                         viewModel.applyParsed(parsed, overwrite = true)
+                        after?.invoke()
                         scope.launch {
                             snackbar.showSnackbar("已从${pendingFillLabel}填入")
                         }
                     },
-                ) { Text("填入") }
+                ) { Text("覆盖填入") }
             },
-            dismissButton = { TextButton(onClick = { pendingPaste = null }) { Text("取消") } },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingPaste = null
+                        pendingAfterApply = null
+                    },
+                ) { Text("取消") }
+            },
         )
     }
 
@@ -1213,6 +1269,27 @@ private fun climbNotePlaceholder(noStairs: TriState): String = when (noStairs) {
     TriState.UNKNOWN -> "先去楼下看看，回来再补"
 }
 
+/** Human-readable diff of filled fields the incoming parse would replace. */
+internal fun RecordDraft.pendingDiff(parsed: ParsedOrder): List<String> = buildList {
+    fun cmp(label: String, current: String, incoming: String?) {
+        val next = incoming?.trim().orEmpty()
+        if (next.isNotEmpty() && current.isNotBlank() && current.trim() != next) {
+            add("· $label：${current.trim()} → $next")
+        }
+    }
+    cmp("位置", location, parsed.location)
+    cmp("订单号", orderNo, parsed.orderNo)
+    cmp("尾号", phoneTail, parsed.phoneTail)
+    cmp("分机号", phoneExt, parsed.phoneExt)
+    cmp("楼层", floor, parsed.floor)
+    cmp("房号", roomNo, parsed.roomNo)
+    parsed.deliveryMethod?.takeIf { it != DeliveryMethod.UNKNOWN }?.let { incoming ->
+        if (deliveryMethod != DeliveryMethod.UNKNOWN && deliveryMethod != incoming) {
+            add("· 交付方式：${deliveryMethod.deliveryLabel()} → ${incoming.deliveryLabel()}")
+        }
+    }
+}
+
 /** "已提取：位置 · 房号 · 尾号" plus a red reminder for required fields the parse missed. */@Composable
 private fun RecognitionSummary(fields: List<String>, draft: RecordDraft) {
     val status = LocalLouJiStatusColors.current
@@ -1316,13 +1393,14 @@ private fun OcrLinePicker(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            lines.take(12).forEach { line ->
+            lines.take(12).forEachIndexed { index, line ->
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { selected = line },
+                        .clickable { selected = line }
+                        .testTag("ocr_line_$index"),
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 ) {
@@ -1358,7 +1436,9 @@ private fun OcrLinePicker(
                                 onPick(line, field)
                                 selected = null
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("ocr_field_${field.name}"),
                         ) {
                             Text(field.label, modifier = Modifier.fillMaxWidth())
                         }

@@ -9,8 +9,8 @@
 
 | 项目 | 结果 | 证据 |
 | --- | --- | --- |
-| JVM 单元测试 | 77 / 77 通过 | `app/build/reports/tests/testDebugUnitTest/` |
-| 仪器化测试（API 35） | 58 / 58 通过 | `app/build/reports/androidTests/connected/debug/` |
+| JVM 单元测试 | 82 / 82 通过 | `app/build/reports/tests/testDebugUnitTest/` |
+| 仪器化测试（API 35） | 61 / 61 通过 | `app/build/reports/androidTests/connected/debug/` |
 | 仪器化测试（API 26/24） | DAO + 迁移（含 5→6）+ 备份加密 各 25 / 25 通过 | 独立模拟器（Android 8.0 / 7.1.1 / 7.0） |
 | 仪器化测试（API 24，minSdk） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit24` 模拟器（Android 7.0） |
 | 仪器化测试（API 25） | DAO + 迁移 + 备份加密 23 / 23 通过 | 新建 `LouJiAudit25` 模拟器（Android 7.1.1） |
@@ -318,6 +318,10 @@
 - `BackupManagerTest` 新增 2 项：导出导入恢复 `buildings.json`（门禁/柜点/标签/备注/置顶）与封面图、附件 `ORDER_SCREENSHOT` 分类保留；`clearAll` 同时清空楼栋并删除封面文件。
 - `RecordDaoTest` 新增 2 项：决策统计与楼栋榜按时间区间过滤且排除归档；`PENDING` 筛选与待确认计数只含活跃未决记录。
 - `StatsPeriodTest`：`StatsViewModel` 切到「今日」只统计当天，「全部」含历史但排除归档，排行榜同步。
-- `RecordEditViewModelTest`：无扩展名/无 MIME 的 Photo Picker URI 仍能导入并把首图标记为 `ORDER_SCREENSHOT`；纯白无文字截图 OCR 失败后依然挂图。
+- `RecordEditViewModelTest`：无扩展名/无 MIME 的 Photo Picker URI 仍能导入并把首图标记为 `ORDER_SCREENSHOT`；纯白无文字截图 OCR 失败后依然挂图（并断言不臆造 OCR 行/字段）；真实渲染的无关中文截图（「今日特价 18 元 牛肉面」）OCR 后 `ocrLines` 非空且字段为空，点行选房号可填入 18；已有位置时 OCR 解析结果交给调用方，不先写库，等覆盖确认。
+- `OcrPickerFlowTest`（Compose）：真实 OCR 一张含无关文字的截图 → 分享管线把 `ocr`+`imageMedia` 交给编辑页 → `ocr_line_picker` 可见 → 点 OCR 行 → 选「房号」→ `field_room` 填入 18。
+- `PendingFillDiffTest`（4 项）：相同值/空字段不弹确认；被替换的位置、房号、交付方式各产生一条差异；相同交付方式不算差异。
+- **根因修复**：`BitmapFactory` 在 `inJustDecodeBounds` 下按设计返回 null，旧代码把该 null 当作读取失败，导致所有截图 OCR 都报「无法读取图片文件」。改为以输入流是否成功打开判断可读性；测试用真实中文截图验证 `engineUsed=mlkit-chinese`。
+- 解析器补充：合并视觉行 `收货地址 江景苑2栋 房号2103` 不再因含「房号」被跳过地址。
 - 手工 UI 走查：1.0× 浅色首页/洞察（`v2.2-home-light.png`、`v2.2-insights-light.png`）、1.3× 引导（`v2.2-home-1.3x.png`）、2.0× 深色首页（`v2.2-home-dark-2x.png`）与表单（`v2.2-edit-2x.png`）；修复引导页标题黑字不可读、首页顶栏 2.0× 裁切、三联工具卡与决策选项换行截断。
-- 全量结果：JVM 77 / 77，API 35 仪器化 58 / 58，Lint 0 error（32 warning），`:app:assembleDebug` 通过。
+- 全量结果：JVM 82 / 82，API 35 仪器化 61 / 61，Lint 0 error（32 warning），`:app:assembleDebug` 通过。
