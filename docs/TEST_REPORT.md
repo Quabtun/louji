@@ -17,7 +17,7 @@
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | v2.1.0 已签名（versionCode 34）；v2.2.0 通过 `assembleDebug` | `apksigner verify` 通过 |
+| Release APK | v2.2.0 已签名（versionCode 35，47.8MB 含中文模型），已发布 GitHub Release | `apksigner verify` 通过；2.1.0 → 2.2.0 覆盖安装成功 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（59）
@@ -325,3 +325,4 @@
 - 解析器补充：合并视觉行 `收货地址 江景苑2栋 房号2103` 不再因含「房号」被跳过地址。
 - 手工 UI 走查：1.0× 浅色首页/洞察（`v2.2-home-light.png`、`v2.2-insights-light.png`）、1.3× 引导（`v2.2-home-1.3x.png`）、2.0× 深色首页（`v2.2-home-dark-2x.png`）与表单（`v2.2-edit-2x.png`）；修复引导页标题黑字不可读、首页顶栏 2.0× 裁切、三联工具卡与决策选项换行截断。
 - 全量结果：JVM 82 / 82，API 35 仪器化 61 / 61，Lint 0 error（32 warning），`:app:assembleDebug` 通过。
+- 发布：GitHub Release `v2.2.0`（tag 指向 `401c01f`，APK 47,784,014 字节，sha256 `be769803…`，签名 `48d7799e…`）；模拟器从已安装的 2.1.0（versionCode 34）覆盖安装 2.2.0（35）并启动成功。
