@@ -228,6 +228,13 @@ class BuildingViewModel(
 
     fun setCover(path: String?) {
         val current = profile.value ?: return
-        viewModelScope.launch { repository.saveBuilding(current.copy(coverPhotoPath = path)) }
+        val previous = current.coverPhotoPath
+        viewModelScope.launch {
+            repository.saveBuilding(current.copy(coverPhotoPath = path))
+            // Replacing or removing a cover should not leave the old file behind.
+            if (previous != null && previous != path) {
+                mediaStore.deleteAttachment(previous, null)
+            }
+        }
     }
 }
