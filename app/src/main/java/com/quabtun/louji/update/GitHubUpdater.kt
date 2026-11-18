@@ -19,15 +19,52 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+
+/**
+ * State of a cached update, derived from `cacheDir/updates/` without touching the network.
+ */
+sealed class CachedUpdate {
+    /** Nothing usable on disk. */
+    data object None : CachedUpdate()
+
+    /** A complete, checksum-verified APK for a newer version — installable offline. */
+    data class Ready(val info: UpdateInfo, val file: File) : CachedUpdate()
+
+    /** A partial download of a newer version, resumable from [downloadedBytes]. */
+    data class Partial(val info: UpdateInfo, val file: File, val downloadedBytes: Long) : CachedUpdate()
+}
+
+/**
+ * Metadata stored next to the APK so a restart can resume or install without network.
+ */
+@Serializable
+private data class CachedUpdateMeta(
+    val versionName: String = "",
+    val notes: String = "",
+    val apkUrl: String = "",
+    val apkSize: Long = 0,
+    val sha256: String = "",
+    val eTag: String = "",
+    val fileName: String = "",
+    val downloadedAt: Long = 0,
+)
 
 class GitHubUpdater(
     private val context: Context,
     private val client: OkHttpClient = defaultClient(),
+    /** Optional acceleration hosts, appended after the official hosts. Order = preference. */
+    private val mirrorHosts: List<String> = emptyList(),
+    /** Test-only escape hatch: adds hosts to the trust list without shipping a mirror. */
+    private val trustedHostOverrides: Set<String> = emptySet(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val updatesDir: File get() = File(context.cacheDir, "updates").apply { mkdirs() }
+    private val metaFile: File get() = File(updatesDir, META_FILE)
 
     /**
      * Returns the newest release when it is newer than [currentVersion], null otherwise.
+     * Asset selection prefers a build matching the device ABI, falling back to universal.
      */
     suspend fun check(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -44,97 +81,304 @@ class GitHubUpdater(
             if (release.tagName.isBlank() || !AppVersion.isNewer(release.tagName, currentVersion)) {
                 return@withContext null
             }
-            val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+            val info = selectUpdate(release)
                 ?: throw IOException("最新版本没有 APK 文件")
             val checksum = release.assets.firstOrNull {
                 it.name.endsWith(".sha256", ignoreCase = true)
             }
-            verifyGitHubUrl(apk.downloadUrl)
-            checksum?.let { verifyGitHubUrl(it.downloadUrl) }
-            UpdateInfo(
-                versionName = release.tagName.removePrefix("v").removePrefix("V"),
-                notes = release.body.trim(),
-                apkUrl = apk.downloadUrl,
-                apkSize = apk.size,
-                sha256Url = checksum?.downloadUrl,
-            )
+            verifyTrustedUrl(info.apkUrl)
+            checksum?.let { verifyTrustedUrl(it.downloadUrl) }
+            info
         }
     }
 
+    private fun selectUpdate(release: ReleaseDto): UpdateInfo? {
+        val checksumAsset = release.assets.firstOrNull {
+            it.name.endsWith(".sha256", ignoreCase = true)
+        }
+        val selectedName = ApkAbiMatcher.select(
+            release.assets.map { ApkAbiMatcher.AssetName(it.name) },
+        ) ?: return null
+        val apk = release.assets.first { it.name == selectedName }
+        val info = UpdateInfo(
+            versionName = release.tagName.removePrefix("v").removePrefix("V"),
+            notes = release.body.trim(),
+            apkUrl = apk.downloadUrl,
+            apkSize = apk.size,
+            sha256Url = checksumAsset?.downloadUrl,
+            apkName = apk.name,
+        )
+        verifyTrustedUrl(info.apkUrl)
+        return info
+    }
+
+    // ------------------------------------------------------------- cache inspection
+
+    private fun readMeta(): CachedUpdateMeta? = runCatching {
+        if (!metaFile.isFile) return null
+        json.decodeFromString<CachedUpdateMeta>(metaFile.readText())
+    }.getOrNull()
+
+    private fun writeMeta(meta: CachedUpdateMeta) {
+        runCatching {
+            metaFile.writeText(json.encodeToString(CachedUpdateMeta.serializer(), meta))
+        }
+    }
+
+    fun cachedInfoOrNull(): UpdateInfo? = readMeta()?.let { meta ->
+        UpdateInfo(
+            versionName = meta.versionName,
+            notes = meta.notes,
+            apkUrl = meta.apkUrl,
+            apkSize = meta.apkSize,
+            sha256Url = null,
+            sha256 = meta.sha256.takeIf { it.length == 64 },
+            eTag = meta.eTag.takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun saveMeta(info: UpdateInfo, fileName: String) {
+        writeMeta(
+            CachedUpdateMeta(
+                versionName = info.versionName,
+                notes = info.notes.take(4000),
+                apkUrl = info.apkUrl,
+                apkSize = info.apkSize,
+                sha256 = info.sha256.orEmpty(),
+                eTag = info.eTag.orEmpty(),
+                fileName = fileName,
+                downloadedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    /**
+     * Inspects the update cache without any network access. Expired files (current or older
+     * versions) are deleted; a verified full APK of a newer version becomes [CachedUpdate.Ready]
+     * and a partial one becomes [CachedUpdate.Partial] so the UI can offer "继续下载".
+     */
+    fun inspectCachedUpdate(currentVersion: String): CachedUpdate {
+        val meta = readMeta()
+        if (meta == null) {
+            sweepUnknownFiles()
+            return CachedUpdate.None
+        }
+        val version = meta.versionName
+        if (version.isBlank() || !AppVersion.isNewer(version, currentVersion)) {
+            clearCache()
+            return CachedUpdate.None
+        }
+        val info = cachedInfoOrNull() ?: run {
+            clearCache()
+            return CachedUpdate.None
+        }
+        val expectedFile = File(
+            updatesDir,
+            meta.fileName.takeIf { it.isNotBlank() } ?: "louji-${safeVersionName(version)}.apk",
+        )
+        val partial = File(updatesDir, expectedFile.name + PART_SUFFIX)
+
+        val fullValid = expectedFile.isFile && expectedFile.length() > 0 &&
+            (info.apkSize <= 0 || expectedFile.length() == info.apkSize) &&
+            (info.sha256 == null || sha256(expectedFile).equals(info.sha256, true))
+        if (fullValid) {
+            return CachedUpdate.Ready(info, expectedFile)
+        }
+        // A full file that fails verification is worthless; keep only a resumable partial.
+        if (expectedFile.isFile) expectedFile.delete()
+
+        if (partial.isFile && partial.length() > 0 &&
+            (info.apkSize <= 0 || partial.length() < info.apkSize)
+        ) {
+            return CachedUpdate.Partial(info, partial, partial.length())
+        }
+        if (partial.isFile && partial.length() <= 0) partial.delete()
+        return CachedUpdate.None
+    }
+
+    /** Deletes every apk/part in the cache that is not covered by current metadata. */
+    private fun sweepUnknownFiles() {
+        updatesDir.listFiles()?.forEach { file ->
+            if (file.name != META_FILE &&
+                (file.name.endsWith(".apk", true) || file.name.endsWith(PART_SUFFIX, true))
+            ) {
+                file.delete()
+            }
+        }
+    }
+
+    fun clearCache() {
+        updatesDir.listFiles()?.forEach { it.delete() }
+    }
+
+    // ------------------------------------------------------------------- download
+
+    /**
+     * Downloads (or resumes) the APK into the cache. Cancellation and IO failures keep the
+     * `.part` file so the next attempt can continue; only a checksum mismatch, a size overrun
+     * or an explicit reset deletes it.
+     */
     suspend fun download(
         info: UpdateInfo,
         onProgress: (Float) -> Unit = {},
+        forceRestart: Boolean = false,
     ): File = withContext(Dispatchers.IO) {
         if (info.apkSize > MAX_APK_BYTES) {
             throw IOException("安装包过大，已停止下载")
         }
         val version = safeVersionName(info.versionName)
-        val directory = File(context.cacheDir, "updates").apply { mkdirs() }
-        val target = File(directory, "louji-$version.apk")
-        val partial = File(directory, "louji-$version.apk.part")
-        partial.delete()
-        val request = Request.Builder()
-            .url(info.apkUrl)
-            .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
-            .build()
+        val target = File(updatesDir, "louji-$version.apk")
+        val partial = File(updatesDir, "louji-$version.apk.part")
+
+        // Already-complete file wins: never download the same version twice.
+        if (!forceRestart && target.isFile && isVerified(target, info)) {
+            saveMeta(info.copy(sha256 = info.sha256), target.name)
+            onProgress(1f)
+            return@withContext target
+        }
+
+        val resolved = resolveChecksum(info)
+        val resumeFrom = if (forceRestart) {
+            partial.delete()
+            0L
+        } else {
+            partial.takeIf { it.isFile && it.length() > 0 }?.length() ?: 0L
+        }
+        if (info.apkSize > 0 && resumeFrom > info.apkSize) {
+            // Partial grew past the expected size: the bytes are junk.
+            partial.delete()
+        }
+
+        var written = if (partial.isFile) partial.length() else 0L
+        var bodyUsed = false
         try {
-            client.newCall(request).execute().use { response ->
-                verifyGitHubUrl(response.request.url.toString())
-                if (!response.isSuccessful) throw IOException("下载失败：HTTP ${response.code}")
-                val body = response.body ?: throw IOException("下载失败：没有内容")
-                val total = body.contentLength().takeIf { it > 0 } ?: info.apkSize
-                if (total > MAX_APK_BYTES) {
-                    throw IOException("安装包过大，已停止下载")
+            val response = openDownload(info, resumeFrom, resolved.eTag)
+            var append = false
+            response.use { resp ->
+                val code = resp.code
+                when {
+                    code == 206 -> {
+                        val start = contentRangeStart(resp.header("Content-Range"))
+                        if (start != resumeFrom) {
+                            // Server resumed from somewhere else: restart from zero safely.
+                            partial.delete()
+                            written = 0L
+                        } else {
+                            append = true
+                        }
+                    }
+                    code == 200 -> written = 0L // Overwrite from scratch.
+                    code == 416 -> {
+                        val already = partial.length()
+                        if (info.apkSize > 0 && already >= info.apkSize) {
+                            // The partial is actually complete; fall through to verification.
+                        } else {
+                            partial.delete()
+                            throw IOException("断点信息已过期，请重新下载")
+                        }
+                    }
+                    !resp.isSuccessful -> throw IOException("下载失败：HTTP $code")
                 }
+                // A complete 416 partial skips the body entirely.
+                if (resp.body == null) throw IOException("下载失败：没有内容")
+                val body = resp.body!!
+                bodyUsed = true
+
+                val total = when {
+                    code == 206 -> info.apkSize.takeIf { it > 0 }
+                        ?: (resumeFrom + body.contentLength())
+                    else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
+                }
+                if (total > MAX_APK_BYTES) throw IOException("安装包过大，已停止下载")
+
                 body.byteStream().use { input ->
-                    partial.outputStream().use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var written = 0L
-                        var lastReported = 0
+                    // Append for a matching 206 resume, overwrite for anything else.
+                    java.io.FileOutputStream(partial, append).use { raw ->
+                        val output = java.io.BufferedOutputStream(raw, BUFFER_BYTES)
+                        val buffer = ByteArray(BUFFER_BYTES)
                         while (true) {
                             coroutineContext.ensureActive()
                             val read = input.read(buffer)
                             if (read <= 0) break
                             written += read
-                            if (written > MAX_APK_BYTES) {
-                                throw IOException("安装包过大，已停止下载")
+                            if (total > 0 && written > total) {
+                                throw IOException("文件超出预期大小，已停止下载")
                             }
                             output.write(buffer, 0, read)
                             if (total > 0) {
-                                val percent = ((written * 100) / total).toInt()
-                                if (percent != lastReported) {
-                                    lastReported = percent
-                                    onProgress((written.toFloat() / total).coerceIn(0f, 1f))
-                                }
+                                onProgress((written.toFloat() / total).coerceIn(0f, 1f))
                             }
                         }
+                        output.flush()
                     }
                 }
-                if (info.apkSize > 0 && partial.length() != info.apkSize) {
-                    throw IOException("下载不完整，请重试")
-                }
-                val expected = info.sha256Url?.let {
-                    fetchChecksum(it) ?: throw IOException("校验文件不可用，请重试")
-                }
-                if (expected != null && !sha256(partial).equals(expected, ignoreCase = true)) {
-                    throw IOException("安装包校验失败，请重试")
-                }
-                if (target.exists() && !target.delete()) {
-                    throw IOException("无法替换旧安装包")
-                }
-                if (!partial.renameTo(target)) {
-                    throw IOException("下载文件无法保存")
-                }
-                if (!target.isFile || target.length() == 0L) {
-                    throw IOException("下载文件无法保存")
-                }
-                onProgress(1f)
-                target
             }
+
+            if (info.apkSize > 0 && partial.length() != info.apkSize) {
+                throw IOException("下载不完整，请重试")
+            }
+            if (resolved.sha256 != null && !sha256(partial).equals(resolved.sha256, true)) {
+                // Checksum mismatch: the bytes cannot be trusted, drop the partial.
+                partial.delete()
+                throw IOException("安装包校验失败，请重新下载")
+            }
+            if (target.exists() && !target.delete()) {
+                throw IOException("无法替换旧安装包")
+            }
+            if (!partial.renameTo(target)) {
+                throw IOException("下载文件无法保存")
+            }
+            if (!target.isFile || target.length() == 0L) {
+                throw IOException("下载文件无法保存")
+            }
+            saveMeta(info.copy(sha256 = resolved.sha256), target.name)
+            onProgress(1f)
+            target
         } catch (error: Throwable) {
-            partial.delete()
+            // Keep the .part for cancellation / IO failures so the download can resume.
+            if (error is IOException && error.message?.contains("校验失败") == true) {
+                partial.delete()
+            }
             throw error
         }
+    }
+
+    private class Resolved(val sha256: String?, val eTag: String?)
+
+    /** Uses the cached checksum when present; otherwise fetches and remembers it. */
+    private suspend fun resolveChecksum(info: UpdateInfo): Resolved = withContext(Dispatchers.IO) {
+        val cached = info.sha256?.takeIf { it.length == 64 }
+        if (cached != null) return@withContext Resolved(cached, info.eTag)
+        val url = info.sha256Url ?: return@withContext Resolved(null, info.eTag)
+        Resolved(fetchChecksum(url), info.eTag)
+    }
+
+    private fun openDownload(info: UpdateInfo, resumeFrom: Long, eTag: String?): Response {
+        // Byte streams come from the official asset URL only. A future mirror must be listed in
+        // ALLOWED_MIRROR_HOSTS before it is ever contacted, and the final bytes still have to
+        // match the checksum from the official .sha256 asset.
+        if (!isTrustedHost(info.apkUrl)) throw IOException("更新地址不受信任")
+        val request = Request.Builder()
+            .url(info.apkUrl)
+            .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
+            .apply {
+                // Resume only when we can anchor the partial to the remote file (ETag).
+                // Without it a 206 could append bytes of a different release.
+                if (resumeFrom > 0 && !eTag.isNullOrBlank()) {
+                    header("Range", "bytes=$resumeFrom-")
+                    header("If-Range", eTag)
+                }
+            }
+            .build()
+        val response = client.newCall(request).execute()
+        verifyTrustedUrl(response.request.url.toString())
+        return response
+    }
+
+    private fun contentRangeStart(header: String?): Long? {
+        if (header.isNullOrBlank()) return null
+        // Format: bytes 1234-5678/9100 or bytes */9100
+        return Regex("""bytes\s+(\d+)-""").find(header)?.groupValues?.get(1)?.toLongOrNull()
     }
 
     fun canInstallPackages(): Boolean =
@@ -168,24 +412,32 @@ class GitHubUpdater(
         context.startActivity(intent)
     }
 
+    private fun isVerified(file: File, info: UpdateInfo): Boolean {
+        if (info.apkSize > 0 && file.length() != info.apkSize) return false
+        val sha = info.sha256?.takeIf { it.length == 64 } ?: return true
+        return sha256(file).equals(sha, true)
+    }
+
     private fun fetchChecksum(url: String): String? {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
             .build()
         client.newCall(request).execute().use { response ->
-            verifyGitHubUrl(response.request.url.toString())
+            verifyTrustedUrl(response.request.url.toString())
             if (!response.isSuccessful) return null
             val text = response.body?.string().orEmpty().trim()
             return text.split(Regex("\\s+")).firstOrNull()
-                ?.takeIf { it.length == 64 && it.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' } }
+                ?.takeIf {
+                    it.length == 64 && it.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' }
+                }
         }
     }
 
-    private fun sha256(file: File): String {
+    fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            val buffer = ByteArray(BUFFER_BYTES)
             while (true) {
                 val read = input.read(buffer)
                 if (read <= 0) break
@@ -201,18 +453,19 @@ class GitHubUpdater(
         return safe.take(64)
     }
 
-    private fun verifyGitHubUrl(url: String) {
+    /** Only https on an explicitly whitelisted host may be contacted. */
+    private fun isTrustedHost(url: String): Boolean {
         val parsed = Uri.parse(url)
-        val host = parsed.host?.lowercase()
-        val trustedHosts = setOf(
-            "github.com",
-            "objects.githubusercontent.com",
-            "release-assets.githubusercontent.com",
-        )
-        if (parsed.scheme != "https" || host !in trustedHosts) {
-            throw IOException("更新地址不受信任")
-        }
+        val host = parsed.host?.lowercase() ?: return false
+        if (parsed.scheme != "https" && host !in trustedHostOverrides) return false
+        return host in trustedHosts()
     }
+
+    private fun verifyTrustedUrl(url: String) {
+        if (!isTrustedHost(url)) throw IOException("更新地址不受信任")
+    }
+
+    private fun trustedHosts(): Set<String> = OFFICIAL_HOSTS + trustedHostOverrides
 
     @Serializable
     private data class ReleaseDto(
@@ -228,13 +481,30 @@ class GitHubUpdater(
         val size: Long = 0,
     )
 
-    private companion object {
+    companion object {
+        const val META_FILE = "update-meta.json"
+        const val PART_SUFFIX = ".part"
+        const val BUFFER_BYTES = 64 * 1024
         const val MAX_APK_BYTES = 250L * 1024 * 1024
 
+        /** Hard-coded official download hosts. */
+        private val OFFICIAL_HOSTS = setOf(
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+        )
+
+        /**
+         * Explicit mirror whitelist. A host not in this list can never be contacted via the
+         * `mirrorHosts` constructor argument. Empty for now — no third-party mirror is trusted.
+         */
+        val ALLOWED_MIRROR_HOSTS: Set<String> = emptySet()
+
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .followRedirects(true)
             .build()
     }

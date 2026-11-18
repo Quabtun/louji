@@ -361,8 +361,10 @@ class RecordFlowTest {
 
         compose.onNodeWithTag("tab_me").performClick()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("导出备份").fetchSemanticsNodes().isNotEmpty()
         }
+        // 低频工具收在折叠组：先展开再进合并。
+        compose.onNodeWithTag("advanced_tools_toggle").performScrollTo().performClick()
         compose.onNodeWithTag("settings_merge").performScrollTo().performClick()
         compose.waitUntil(8_000) {
             compose.onAllNodesWithText("发现 1 组重复", substring = true)

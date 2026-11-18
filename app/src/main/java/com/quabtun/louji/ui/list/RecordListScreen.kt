@@ -166,6 +166,9 @@ fun RecordListScreen(
     onOpenInsights: () -> Unit,
     onOpenBuilding: (String) -> Unit,
     onDuplicate: (Long) -> Unit,
+    insightsVisible: Boolean = true,
+    batchAndArchiveEnabled: Boolean = true,
+    quickSaveBarVisible: Boolean = true,
     onQuickEdit: (
         text: String?,
         imageUri: Uri?,
@@ -204,6 +207,8 @@ fun RecordListScreen(
     var zoomedImage by remember { mutableStateOf<String?>(null) }
     var showFilterSheet by remember { mutableStateOf(false) }
     val usePaged = sort == RecordSort.UPDATED && !showTrash
+    // 多选/归档是高级能力：默认隐藏，回收站内也永远不可滑。
+    val swipeEnabled = batchAndArchiveEnabled && !showTrash
     val activeConditionCount = listOf(
         showArchived,
         showTrash,
@@ -344,17 +349,25 @@ fun RecordListScreen(
                                         text = "本月 ${stats.total} 单 · 免爬 ${stats.rate()}%",
                                         modifier = Modifier
                                             .testTag("stats_entry")
-                                            .clickable(onClick = onOpenInsights),
+                                            .let { base ->
+                                                if (insightsVisible) {
+                                                    base.clickable(onClick = onOpenInsights)
+                                                } else {
+                                                    base
+                                                }
+                                            },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 2,
                                     )
                                 }
                             }
-                            TextButton(
-                                onClick = viewModel::enterSelectionMode,
-                                modifier = Modifier.testTag("selection_mode"),
-                            ) { Text("多选") }
+                            if (batchAndArchiveEnabled) {
+                                TextButton(
+                                    onClick = viewModel::enterSelectionMode,
+                                    modifier = Modifier.testTag("selection_mode"),
+                                ) { Text("多选") }
+                            }
                         }
                     }
                 }
@@ -397,31 +410,33 @@ fun RecordListScreen(
                                     },
                                 )
                             }
-                            item {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    QuickActionTile(
-                                        title = "截屏秒存",
-                                        caption = if (autoSaveEnabled) "自动入库" else "填入表单",
-                                        icon = R.drawable.ic_gallery,
-                                        modifier = Modifier.weight(1f).testTag("quick_ocr"),
-                                        onClick = {
-                                            quickImageLauncher.launch(
-                                                PickVisualMediaRequest(
-                                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                                ),
-                                            )
-                                        },
-                                    )
-                                    QuickActionTile(
-                                        title = "粘贴秒存",
-                                        caption = if (autoSaveEnabled) "自动入库" else "填入表单",
-                                        icon = R.drawable.ic_export,
-                                        modifier = Modifier.weight(1f).testTag("quick_paste"),
-                                        onClick = { quickPaste() },
-                                    )
+                            if (quickSaveBarVisible) {
+                                item {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        QuickActionTile(
+                                            title = "截屏秒存",
+                                            caption = if (autoSaveEnabled) "自动入库" else "填入表单",
+                                            icon = R.drawable.ic_gallery,
+                                            modifier = Modifier.weight(1f).testTag("quick_ocr"),
+                                            onClick = {
+                                                quickImageLauncher.launch(
+                                                    PickVisualMediaRequest(
+                                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                                    ),
+                                                )
+                                            },
+                                        )
+                                        QuickActionTile(
+                                            title = "粘贴秒存",
+                                            caption = if (autoSaveEnabled) "自动入库" else "填入表单",
+                                            icon = R.drawable.ic_export,
+                                            modifier = Modifier.weight(1f).testTag("quick_paste"),
+                                            onClick = { quickPaste() },
+                                        )
+                                    }
                                 }
                             }
                             item {
@@ -478,6 +493,7 @@ fun RecordListScreen(
                                         item = item,
                                         selectionMode = selectionMode,
                                         selected = item.record.id in selectedIds,
+                                        swipingEnabled = swipeEnabled,
                                         onToggleSelect = { viewModel.toggleSelection(item.record.id) },
                                         onOpen = { onOpenDetail(item.record.id) },
                                         onOpenThumbnail = { zoomedImage = it },
@@ -510,6 +526,7 @@ fun RecordListScreen(
                                     item = item,
                                     selectionMode = selectionMode,
                                     selected = item.record.id in selectedIds,
+                                    swipingEnabled = swipeEnabled,
                                     onToggleSelect = { viewModel.toggleSelection(item.record.id) },
                                     onOpen = { onOpenDetail(item.record.id) },
                                     onOpenThumbnail = { zoomedImage = it },
@@ -597,6 +614,7 @@ fun RecordListScreen(
                 sort = sort,
                 dateRange = dateRange,
                 onDismiss = { showFilterSheet = false },
+                batchAndArchiveEnabled = batchAndArchiveEnabled,
                 onView = { archived, trash ->
                     if (trash) viewModel.setShowTrash(true) else viewModel.setShowArchived(archived)
                 },
@@ -978,6 +996,7 @@ private fun FilterSheet(
     showTrash: Boolean,
     sort: RecordSort,
     dateRange: DateRange,
+    batchAndArchiveEnabled: Boolean = true,
     onDismiss: () -> Unit,
     onView: (Boolean, Boolean) -> Unit,
     onSort: (RecordSort) -> Unit,
@@ -994,21 +1013,23 @@ private fun FilterSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text("视图", style = MaterialTheme.typography.labelMedium)
-            Spacer(Modifier.height(6.dp))
-            TileSegmentedSelector(
-                options = listOf("active" to "活跃", "archived" to "已归档", "trash" to "回收站"),
-                selected = when {
-                    showTrash -> "trash"
-                    showArchived -> "archived"
-                    else -> "active"
-                },
-                onSelect = { value ->
-                    onView(value == "archived", value == "trash")
-                },
-                testTagPrefix = "sheet_view",
-            )
-            Spacer(Modifier.height(16.dp))
+            if (batchAndArchiveEnabled) {
+                Text("视图", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(6.dp))
+                TileSegmentedSelector(
+                    options = listOf("active" to "活跃", "archived" to "已归档", "trash" to "回收站"),
+                    selected = when {
+                        showTrash -> "trash"
+                        showArchived -> "archived"
+                        else -> "active"
+                    },
+                    onSelect = { value ->
+                        onView(value == "archived", value == "trash")
+                    },
+                    testTagPrefix = "sheet_view",
+                )
+                Spacer(Modifier.height(16.dp))
+            }
             Text("排序", style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(6.dp))
             TileSegmentedSelector(
@@ -1097,13 +1118,16 @@ private fun FilterSheet(
                         showEndPicker = false
                         val end = state.selectedDateMillis
                         if (end != null) {
-                            val start = startPicked?.let { DateRangePresets.startOfDay(it) } ?: 0L
+                            // Pick the order automatically if the rider picked the days backwards.
+                            val rawStart = startPicked?.let { DateRangePresets.startOfDay(it) }
+                                ?: DateRangePresets.startOfDay(end)
+                            val rawEnd = DateRangePresets.startOfDay(end)
+                            val startOfDay = minOf(rawStart, rawEnd)
+                            val endOfDay = maxOf(rawStart, rawEnd)
                             onDate(
                                 DateRange(
-                                    start = start,
-                                    end = DateRangePresets.nextDayStart(
-                                        DateRangePresets.startOfDay(end),
-                                    ),
+                                    start = startOfDay,
+                                    end = DateRangePresets.nextDayStart(endOfDay),
                                 ),
                             )
                         }
@@ -1130,6 +1154,7 @@ private fun SwipeableRecordCard(
     item: RecordWithAttachments,
     selectionMode: Boolean,
     selected: Boolean,
+    swipingEnabled: Boolean,
     onToggleSelect: () -> Unit,
     onOpen: () -> Unit,
     onOpenThumbnail: (String) -> Unit,
@@ -1142,6 +1167,18 @@ private fun SwipeableRecordCard(
             selectionMode = true,
             selected = selected,
             onToggleSelect = onToggleSelect,
+            onOpen = onOpen,
+            onOpenThumbnail = onOpenThumbnail,
+        )
+        return
+    }
+    if (!swipingEnabled) {
+        // Recycle bin and simplified mode: no swipe actions, tapping still opens the record.
+        RecordCard(
+            item = item,
+            selectionMode = false,
+            selected = false,
+            onToggleSelect = {},
             onOpen = onOpen,
             onOpenThumbnail = onOpenThumbnail,
         )

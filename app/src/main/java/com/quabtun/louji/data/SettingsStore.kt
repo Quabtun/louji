@@ -27,6 +27,14 @@ data class AppSettings(
     val backupReminderEnabled: Boolean = true,
     val lastBackupAt: Long = 0L,
     val autoSaveOrders: Boolean = true,
+    // --- 简化模式功能显隐（默认全部隐藏非高频项，仅 UI 开关，不动数据） ---
+    val showBuildingTab: Boolean = false,
+    val showInsightsTab: Boolean = false,
+    val showQuickSaveBar: Boolean = true,
+    val enableBatchAndArchive: Boolean = false,
+    val enableFullFormFields: Boolean = false,
+    val enableMediaProTools: Boolean = false,
+    val showEmptyDetailFields: Boolean = false,
 )
 
 class SettingsStore(private val context: Context) {
@@ -47,6 +55,13 @@ class SettingsStore(private val context: Context) {
                 backupReminderEnabled = preferences[BACKUP_REMINDER_ENABLED] ?: true,
                 lastBackupAt = preferences[LAST_BACKUP_AT] ?: 0L,
                 autoSaveOrders = preferences[AUTO_SAVE_ORDERS] ?: true,
+                showBuildingTab = preferences[SHOW_BUILDING_TAB] ?: false,
+                showInsightsTab = preferences[SHOW_INSIGHTS_TAB] ?: false,
+                showQuickSaveBar = preferences[SHOW_QUICK_SAVE_BAR] ?: true,
+                enableBatchAndArchive = preferences[ENABLE_BATCH_AND_ARCHIVE] ?: false,
+                enableFullFormFields = preferences[ENABLE_FULL_FORM_FIELDS] ?: false,
+                enableMediaProTools = preferences[ENABLE_MEDIA_PRO_TOOLS] ?: false,
+                showEmptyDetailFields = preferences[SHOW_EMPTY_DETAIL_FIELDS] ?: false,
             )
         }
 
@@ -82,6 +97,34 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[AUTO_SAVE_ORDERS] = enabled }
     }
 
+    suspend fun setShowBuildingTab(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_BUILDING_TAB] = enabled }
+    }
+
+    suspend fun setShowInsightsTab(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_INSIGHTS_TAB] = enabled }
+    }
+
+    suspend fun setShowQuickSaveBar(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_QUICK_SAVE_BAR] = enabled }
+    }
+
+    suspend fun setEnableBatchAndArchive(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ENABLE_BATCH_AND_ARCHIVE] = enabled }
+    }
+
+    suspend fun setEnableFullFormFields(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ENABLE_FULL_FORM_FIELDS] = enabled }
+    }
+
+    suspend fun setEnableMediaProTools(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ENABLE_MEDIA_PRO_TOOLS] = enabled }
+    }
+
+    suspend fun setShowEmptyDetailFields(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_EMPTY_DETAIL_FIELDS] = enabled }
+    }
+
     private companion object {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
@@ -91,5 +134,12 @@ class SettingsStore(private val context: Context) {
         val BACKUP_REMINDER_ENABLED = booleanPreferencesKey("backup_reminder_enabled")
         val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
         val AUTO_SAVE_ORDERS = booleanPreferencesKey("auto_save_orders")
+        val SHOW_BUILDING_TAB = booleanPreferencesKey("show_building_tab")
+        val SHOW_INSIGHTS_TAB = booleanPreferencesKey("show_insights_tab")
+        val SHOW_QUICK_SAVE_BAR = booleanPreferencesKey("show_quick_save_bar")
+        val ENABLE_BATCH_AND_ARCHIVE = booleanPreferencesKey("enable_batch_and_archive")
+        val ENABLE_FULL_FORM_FIELDS = booleanPreferencesKey("enable_full_form_fields")
+        val ENABLE_MEDIA_PRO_TOOLS = booleanPreferencesKey("enable_media_pro_tools")
+        val SHOW_EMPTY_DETAIL_FIELDS = booleanPreferencesKey("show_empty_detail_fields")
     }
 }

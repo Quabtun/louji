@@ -377,6 +377,9 @@ private fun LouJiRoot(
                                 onCreate = { navController.navigate(editRoute()) },
                                 onOpenDetail = { id -> navController.navigate("detail/$id") },
                                 onOpenInsights = { switchTab(ROUTE_INSIGHTS) },
+                                insightsVisible = settings.showInsightsTab,
+                                batchAndArchiveEnabled = settings.enableBatchAndArchive,
+                                quickSaveBarVisible = settings.showQuickSaveBar,
                                 onOpenBuilding = { location ->
                                     navController.navigate("building/${Uri.encode(location)}")
                                 },
@@ -468,6 +471,8 @@ private fun LouJiRoot(
                                     ?.takeIf { it.isNotBlank() },
                                 shareIntake = container.shareIntake,
                                 autoPaste = entry.arguments?.getInt("pasteNow") == 1,
+                                fullFormFields = settings.enableFullFormFields,
+                                mediaProTools = settings.enableMediaProTools,
                                 onBack = { navController.popBackStack() },
                                 onSaved = { id ->
                                     navController.navigate("detail/$id") { popUpTo(ROUTE_LEDGER) }
@@ -501,6 +506,8 @@ private fun LouJiRoot(
                                 onOpenMediaScreen = { id ->
                                     navController.navigate("record-media/$id")
                                 },
+                                mediaProToolsEnabled = settings.enableMediaProTools,
+                                showEmptyDetailFields = settings.showEmptyDetailFields,
                                 onOpenBuilding = { location ->
                                     navController.navigate("building/${Uri.encode(location)}")
                                 },
@@ -595,12 +602,17 @@ private fun LouJiRoot(
                             val icon: Int,
                         )
 
-                        listOf(
-                            Tab(ROUTE_LEDGER, "台账", R.drawable.ic_stairs),
-                            Tab(ROUTE_BUILDINGS, "楼栋库", R.drawable.ic_building),
-                            Tab(ROUTE_INSIGHTS, "洞察", R.drawable.ic_chart),
-                            Tab(ROUTE_ME, "我的", R.drawable.ic_person),
-                        ).forEach { tab ->
+                        val tabs = buildList {
+                            add(Tab(ROUTE_LEDGER, "台账", R.drawable.ic_stairs))
+                            if (settings.showBuildingTab) {
+                                add(Tab(ROUTE_BUILDINGS, "楼栋库", R.drawable.ic_building))
+                            }
+                            if (settings.showInsightsTab) {
+                                add(Tab(ROUTE_INSIGHTS, "洞察", R.drawable.ic_chart))
+                            }
+                            add(Tab(ROUTE_ME, "我的", R.drawable.ic_person))
+                        }
+                        tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = currentRoute == tab.route,
                                 onClick = { switchTab(tab.route) },
@@ -702,12 +714,16 @@ private fun LouJiRoot(
             is UpdateUiState.Downloading,
             is UpdateUiState.Ready,
             is UpdateUiState.NeedsPermission,
+            is UpdateUiState.Paused,
             -> UpdateSheet(
                 state = state,
-                onDismiss = updateViewModel::dismiss,
-                onDownload = updateViewModel::download,
+                onDismiss = updateViewModel::minimize,
+                onDownload = { updateViewModel.download() },
                 onInstall = updateViewModel::install,
                 onOpenInstallSettings = updateViewModel::openInstallPermissionSettings,
+                onPauseDownload = updateViewModel::pauseDownload,
+                onResumeDownload = { updateViewModel.download() },
+                onRestartDownload = { updateViewModel.download(forceRestart = true) },
             )
             else -> Unit
         }

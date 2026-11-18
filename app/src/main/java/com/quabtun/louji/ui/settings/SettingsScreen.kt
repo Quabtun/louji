@@ -99,6 +99,7 @@ fun SettingsScreen(
 
     var lockDesired by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showAdvancedTools by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showCsvDialog by remember { mutableStateOf(false) }
@@ -215,6 +216,67 @@ fun SettingsScreen(
                 }
 
                 Spacer(Modifier.height(20.dp))
+                SectionHeader("功能定制（简化与高级功能）")
+                Spacer(Modifier.height(10.dp))
+                SettingsCard {
+                    FunctionSwitchRow(
+                        title = "楼栋库页签",
+                        subtitle = "底部多一个「楼栋库」入口，随时查攻略",
+                        checked = settings.showBuildingTab,
+                        onChecked = viewModel::setShowBuildingTab,
+                        tag = "feature_building_tab",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "洞察统计页签",
+                        subtitle = "底部多一个「洞察」入口，看免爬率与爬楼榜",
+                        checked = settings.showInsightsTab,
+                        onChecked = viewModel::setShowInsightsTab,
+                        tag = "feature_insights_tab",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "首页秒存条",
+                        subtitle = "关闭后隐藏「截屏秒存 / 粘贴秒存」方块",
+                        checked = settings.showQuickSaveBar,
+                        onChecked = viewModel::setShowQuickSaveBar,
+                        tag = "feature_quick_save_bar",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "多选 / 归档 / 滑动操作",
+                        subtitle = "顶栏多选、卡片左右滑和已归档 / 回收站视图",
+                        checked = settings.enableBatchAndArchive,
+                        onChecked = viewModel::setEnableBatchAndArchive,
+                        tag = "feature_batch_archive",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "建单完整字段",
+                        subtitle = "性别、交付偏好、性格标签、雷区、订单号等",
+                        checked = settings.enableFullFormFields,
+                        onChecked = viewModel::setEnableFullFormFields,
+                        tag = "feature_full_form",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "媒体专业工具",
+                        subtitle = "录像、图片涂鸦标注和附件分类",
+                        checked = settings.enableMediaProTools,
+                        onChecked = viewModel::setEnableMediaProTools,
+                        tag = "feature_media_pro",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FunctionSwitchRow(
+                        title = "详情显示未填写项",
+                        subtitle = "关闭后详情只看已填的信息，更紧凑",
+                        checked = settings.showEmptyDetailFields,
+                        onChecked = viewModel::setShowEmptyDetailFields,
+                        tag = "feature_empty_detail",
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
                 SectionHeader("隐私安全")
                 Spacer(Modifier.height(10.dp))
                 SettingsCard {
@@ -235,7 +297,6 @@ fun SettingsScreen(
                         },
                     )
                 }
-
                 Spacer(Modifier.height(20.dp))
                 SectionHeader("数据备份与恢复")
                 Spacer(Modifier.height(10.dp))
@@ -274,21 +335,6 @@ fun SettingsScreen(
                             )
                         },
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow(
-                        title = "合并重复记录",
-                        subtitle = "把同一位置、同一订单的重复记录合成一条",
-                        icon = R.drawable.ic_merge,
-                        modifier = Modifier.testTag("settings_merge"),
-                        onClick = { viewModel.checkDuplicates() },
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow(
-                        title = "导出 CSV 台账",
-                        subtitle = "Excel 可直接打开；可选隐私脱敏导出",
-                        icon = R.drawable.ic_chart,
-                        onClick = { showCsvDialog = true },
-                    )
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -315,14 +361,6 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
-                        title = "清理无关媒体",
-                        subtitle = "删除没有记录或楼栋封面引用的缓存图片/视频",
-                        icon = R.drawable.ic_gallery,
-                        modifier = Modifier.testTag("settings_clean_media"),
-                        onClick = { viewModel.cleanOrphans() },
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow(
                         title = "媒体占用",
                         subtitle = storage?.let {
                             "${formatBytes(it.totalBytes)} · ${it.itemCount} 个文件"
@@ -330,17 +368,67 @@ fun SettingsScreen(
                         icon = R.drawable.ic_gallery,
                         onClick = { viewModel.refreshStorage() },
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+
+                Spacer(Modifier.height(20.dp))
+                SectionHeader("高级工具与数据维护（默认折叠）")
+                Spacer(Modifier.height(10.dp))
+                SettingsCard {
                     SettingsRow(
-                        title = "导出诊断日志",
-                        subtitle = "本地脱敏运行日志，不含客户信息",
-                        icon = R.drawable.ic_info,
-                        onClick = {
-                            diagnosticsLauncher.launch(
-                                "louji-diagnostics-${System.currentTimeMillis()}.txt",
-                            )
+                        title = if (showAdvancedTools) "收起高级工具" else "展开高级工具",
+                        subtitle = if (showAdvancedTools) {
+                            "合并重复、CSV、清理媒体、日志、清库"
+                        } else {
+                            "低频维护操作都收纳在这里"
                         },
+                        icon = R.drawable.ic_merge,
+                        modifier = Modifier.testTag("advanced_tools_toggle"),
+                        onClick = { showAdvancedTools = !showAdvancedTools },
                     )
+                    if (showAdvancedTools) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsRow(
+                            title = "合并重复记录",
+                            subtitle = "把同一位置、同一订单的重复记录合成一条",
+                            icon = R.drawable.ic_merge,
+                            modifier = Modifier.testTag("settings_merge"),
+                            onClick = { viewModel.checkDuplicates() },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsRow(
+                            title = "导出 CSV 台账",
+                            subtitle = "Excel 可直接打开；可选隐私脱敏导出",
+                            icon = R.drawable.ic_chart,
+                            onClick = { showCsvDialog = true },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsRow(
+                            title = "清理无关媒体",
+                            subtitle = "删除没有记录或楼栋封面引用的缓存图片/视频",
+                            icon = R.drawable.ic_gallery,
+                            modifier = Modifier.testTag("settings_clean_media"),
+                            onClick = { viewModel.cleanOrphans() },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsRow(
+                            title = "导出诊断日志",
+                            subtitle = "本地脱敏运行日志，不含客户信息",
+                            icon = R.drawable.ic_info,
+                            onClick = {
+                                diagnosticsLauncher.launch(
+                                    "louji-diagnostics-${System.currentTimeMillis()}.txt",
+                                )
+                            },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        SettingsRow(
+                            title = "清除所有记录",
+                            subtitle = "删除本机全部记录和附件，无法恢复",
+                            icon = R.drawable.ic_delete,
+                            danger = true,
+                            onClick = { showClearDialog = true },
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(20.dp))
@@ -378,9 +466,20 @@ fun SettingsScreen(
                         headlineContent = { Text("检查更新") },
                         supportingContent = {
                             Text(
-                                when (updateState) {
+                                when (val update = updateState) {
+                                    is UpdateUiState.Ready ->
+                                        "已下载 v${update.info.versionName} 待安装 · 点击打开"
+                                    is UpdateUiState.Downloading ->
+                                        "正在下载新版本… ${(update.progress * 100).toInt()}%"
+                                    is UpdateUiState.Paused -> {
+                                        val percent = if (update.totalBytes > 0) {
+                                            (update.downloadedBytes * 100 / update.totalBytes).toInt()
+                                        } else {
+                                            0
+                                        }
+                                        "下载已暂停（$percent%）· 点击继续"
+                                    }
                                     is UpdateUiState.Checking -> "正在检查…"
-                                    is UpdateUiState.Downloading -> "正在下载新版本…"
                                     else -> "从 GitHub Releases 获取最新版本"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -394,13 +493,28 @@ fun SettingsScreen(
                                 )
                             } else {
                                 IconButton(
-                                    onClick = { updateViewModel.checkNow() },
+                                    onClick = {
+                                        // A cached package wins: open the sheet without network.
+                                        if (!updateViewModel.inspectCache()) {
+                                            updateViewModel.checkNow()
+                                        }
+                                    },
                                     modifier = Modifier.testTag("check_update"),
                                 ) {
                                     Icon(Icons.Filled.Refresh, contentDescription = "检查更新")
                                 }
                             }
                         },
+                        modifier = Modifier
+                            .let { base ->
+                                if (updateState is UpdateUiState.Ready ||
+                                    updateState is UpdateUiState.Paused
+                                ) {
+                                    base.testTag("update_cache_entry")
+                                } else {
+                                    base
+                                }
+                            },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
@@ -415,14 +529,6 @@ fun SettingsScreen(
                         subtitle = "记录只存本机；联网用于更新和可选定位",
                         icon = R.drawable.ic_info,
                         onClick = { showPrivacyDialog = true },
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    SettingsRow(
-                        title = "清除所有记录",
-                        subtitle = "删除本机全部记录和附件，无法恢复",
-                        icon = R.drawable.ic_delete,
-                        danger = true,
-                        onClick = { showClearDialog = true },
                     )
                 }
 
@@ -747,5 +853,32 @@ private fun SettingsRow(
             )
         },
         modifier = modifier.clickable(onClick = onClick),
+    )
+}
+
+/** One feature-visibility toggle with a plain-language explanation. */
+@Composable
+private fun FunctionSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChecked: (Boolean) -> Unit,
+    tag: String,
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onChecked,
+                modifier = Modifier.testTag(tag),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                ),
+            )
+        },
     )
 }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.quabtun.louji.model.RecordDraft
@@ -58,10 +59,15 @@ class AccessibilitySemanticsTest {
     fun settingsControlsAreLabelled() {
         compose.onNodeWithTag("tab_me").performClick()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("导出备份").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("应用锁").assertExists()
         compose.onNodeWithText("导出备份").assertExists()
+        // 低频工具现在收在折叠组里，展开后才有「合并重复记录」。
+        compose.onNodeWithTag("advanced_tools_toggle").performScrollTo().performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("合并重复记录").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("合并重复记录").assertExists()
     }
 }

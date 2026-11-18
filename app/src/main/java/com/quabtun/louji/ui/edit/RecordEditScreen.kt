@@ -125,6 +125,8 @@ fun RecordEditScreen(
     onBack: () -> Unit,
     onSaved: (Long) -> Unit,
     onOpenAnnotate: (Long) -> Unit = {},
+    fullFormFields: Boolean = true,
+    mediaProTools: Boolean = true,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val recentLocations by viewModel.recentLocations.collectAsStateWithLifecycle()
@@ -320,7 +322,8 @@ fun RecordEditScreen(
         return
     }
 
-    if (showCamera) {        CameraCaptureScreen(
+    if (showCamera) {
+        CameraCaptureScreen(
             mediaStore = mediaStore,
             initialVideo = cameraVideo,
             onClose = { showCamera = false },
@@ -749,8 +752,9 @@ fun RecordEditScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                // ---- Card 3: customer ----
-                FormCard(title = "客户与交付") {
+                // ---- Card 3: customer (advanced; hidden in simplified mode) ----
+                if (fullFormFields) {
+                    FormCard(title = "客户与交付") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = ui.draft.phoneTail,
@@ -861,20 +865,23 @@ fun RecordEditScreen(
                         maxLines = 3,
                         shape = RoundedCornerShape(12.dp),
                     )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
                 // ---- Card 4: order + remark ----
                 FormCard(title = "订单与备注") {
-                    OutlinedTextField(
-                        value = ui.draft.orderNo,
-                        onValueChange = viewModel::setOrderNo,
-                        modifier = Modifier.fillMaxWidth().testTag("field_order"),
-                        label = { Text("订单号") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    Spacer(Modifier.height(10.dp))
+                    if (fullFormFields) {
+                        OutlinedTextField(
+                            value = ui.draft.orderNo,
+                            onValueChange = viewModel::setOrderNo,
+                            modifier = Modifier.fillMaxWidth().testTag("field_order"),
+                            label = { Text("订单号") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     OutlinedTextField(
                         value = ui.draft.remark,
                         onValueChange = viewModel::setRemark,

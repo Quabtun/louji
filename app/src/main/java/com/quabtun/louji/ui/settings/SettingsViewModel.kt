@@ -85,6 +85,34 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settings.setAutoSaveOrders(enabled) }
     }
 
+    fun setShowBuildingTab(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setShowBuildingTab(enabled) }
+    }
+
+    fun setShowInsightsTab(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setShowInsightsTab(enabled) }
+    }
+
+    fun setShowQuickSaveBar(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setShowQuickSaveBar(enabled) }
+    }
+
+    fun setEnableBatchAndArchive(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setEnableBatchAndArchive(enabled) }
+    }
+
+    fun setEnableFullFormFields(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setEnableFullFormFields(enabled) }
+    }
+
+    fun setEnableMediaProTools(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setEnableMediaProTools(enabled) }
+    }
+
+    fun setShowEmptyDetailFields(enabled: Boolean) {
+        viewModelScope.launch { container.settings.setShowEmptyDetailFields(enabled) }
+    }
+
     fun refreshStorage() {
         viewModelScope.launch {
             _storage.value = container.mediaStore.storageUsage()

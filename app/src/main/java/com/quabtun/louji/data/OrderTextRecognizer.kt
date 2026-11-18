@@ -17,6 +17,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -156,7 +157,7 @@ class OrderTextRecognizer(
         }.onFailure { record("latin_init", it) }.getOrNull()
     }
     private val chineseBroken = AtomicBoolean(false)
-    private var firstRun = true
+    private val firstRun = AtomicBoolean(true)
 
     /** Legacy entry point: raw text only. */
     suspend fun recognize(uri: Uri): String = analyze(uri).rawText
@@ -337,23 +338,50 @@ class OrderTextRecognizer(
         client: TextRecognizer,
         input: InputImage,
         yOffset: Int,
-    ): Outcome {
-        val timeout = if (firstRun) FIRST_RUN_TIMEOUT_SECONDS else TIMEOUT_SECONDS
-        firstRun = false
+    ): Outcome = when (val error = runCatchingOnce(client, input, yOffset)) {
+        is Recognized -> Outcome(lines = collectLines(error.result, yOffset))
+        is Cancelled -> throw error.original
+        is Failed -> Outcome(
+            lines = emptyList(),
+            error = reasonFor(error.original),
+            throwable = error.original,
+            // Only a genuinely unavailable engine (init/native failure) trips the breaker.
+            // A timeout may just be a cold model, and cancellations must never do so.
+            fatal = error.original !is TimeoutException && !error.original.isCancellation(),
+        )
+    }
+
+    private sealed class RecognizeOutcome
+    private data class Recognized(val result: Text) : RecognizeOutcome()
+    private data class Cancelled(val original: CancellationException) : RecognizeOutcome()
+    private data class Failed(val original: Throwable) : RecognizeOutcome()
+
+    private fun runCatchingOnce(
+        client: TextRecognizer,
+        input: InputImage,
+        yOffset: Int,
+    ): RecognizeOutcome {
+        val timeout = if (firstRun.getAndSet(false)) {
+            FIRST_RUN_TIMEOUT_SECONDS
+        } else {
+            TIMEOUT_SECONDS
+        }
         return try {
-            val result = Tasks.await(client.process(input), timeout, TimeUnit.SECONDS)
-            Outcome(lines = collectLines(result, yOffset))
+            Recognized(Tasks.await(client.process(input), timeout, TimeUnit.SECONDS))
+        } catch (error: CancellationException) {
+            // Coroutine cancellation or a cancelled task: propagate, never disable the engine.
+            Cancelled(error)
+        } catch (error: InterruptedException) {
+            val cancelled = java.util.concurrent.CancellationException(error.message)
+            cancelled.initCause(error)
+            Cancelled(cancelled)
         } catch (error: Throwable) {
-            Outcome(
-                lines = emptyList(),
-                error = reasonFor(error),
-                throwable = error,
-                // A timeout may simply mean a cold model; keep the client for the next attempt.
-                // Any other failure disables the Chinese engine so we never pay the timeout twice.
-                fatal = error !is TimeoutException,
-            )
+            Failed(error)
         }
     }
+
+    private fun Throwable.isCancellation(): Boolean =
+        this is CancellationException || this is InterruptedException
 
     private fun collectLines(result: Text, yOffset: Int): List<OcrLineBox> {
         val lines = mutableListOf<OcrLineBox>()

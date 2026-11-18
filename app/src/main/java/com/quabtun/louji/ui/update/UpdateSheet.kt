@@ -1,5 +1,6 @@
 package com.quabtun.louji.ui.update
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -40,12 +42,16 @@ fun UpdateSheet(
     onDownload: () -> Unit,
     onInstall: () -> Unit,
     onOpenInstallSettings: () -> Unit,
+    onPauseDownload: () -> Unit = {},
+    onResumeDownload: () -> Unit = {},
+    onRestartDownload: () -> Unit = {},
 ) {
     val info = when (state) {
         is UpdateUiState.Available -> state.info
         is UpdateUiState.Downloading -> state.info
         is UpdateUiState.Ready -> state.info
         is UpdateUiState.NeedsPermission -> state.info
+        is UpdateUiState.Paused -> state.info
         else -> return
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -130,15 +136,71 @@ fun UpdateSheet(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "正在下载… ${(state.progress * 100).toInt()}%",
+                        text = "正在下载… ${(state.progress * 100).toInt()}%" +
+                            if (state.downloadedBytes > 0 && state.totalBytes > 0) {
+                                "（${formatBytes(state.downloadedBytes)} / ${formatBytes(state.totalBytes)}）"
+                            } else {
+                                ""
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "关闭弹层不会中断下载。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) { Text("后台下载") }
+                        Button(
+                            onClick = onPauseDownload,
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                        ) { Text("暂停下载") }
+                    }
+                }
+
+                is UpdateUiState.Paused -> {
+                    Text(
+                        text = when {
+                            state.totalBytes > 0 -> {
+                                val percent = state.downloadedBytes * 100 / state.totalBytes
+                                "已下载 ${formatBytes(state.downloadedBytes)} / " +
+                                    "${formatBytes(state.totalBytes)}（$percent%）"
+                            }
+                            else -> "下载已暂停"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = onResumeDownload,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    ) {
+                        Text("继续下载", fontWeight = FontWeight.Bold)
+                    }
                     TextButton(
-                        onClick = onDismiss,
+                        onClick = onRestartDownload,
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) {
-                        Text("取消下载")
+                        Text("重新下载")
                     }
                 }
 

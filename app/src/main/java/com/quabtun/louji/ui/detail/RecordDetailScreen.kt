@@ -78,6 +78,7 @@ import com.quabtun.louji.data.db.RecordWithAttachments
 import com.quabtun.louji.model.AttachmentCategory
 import com.quabtun.louji.model.DeliveryMethod
 import com.quabtun.louji.model.ElevatorType
+import com.quabtun.louji.model.Gender
 import com.quabtun.louji.model.TriState
 import com.quabtun.louji.model.categoryLabel
 import com.quabtun.louji.model.deliveryLabel
@@ -113,6 +114,8 @@ fun RecordDetailScreen(
     onArchive: (Boolean) -> Unit,
     onOpenMedia: (Long, Int) -> Unit,
     onOpenMediaScreen: (Long) -> Unit = {},
+    mediaProToolsEnabled: Boolean = true,
+    showEmptyDetailFields: Boolean = true,
     onOpenBuilding: (String) -> Unit,
     onOpenAnnotate: (Long) -> Unit,
 ) {
@@ -335,33 +338,43 @@ fun RecordDetailScreen(
                                 placeDisplay(item.record.floor, item.record.roomNo)
                             },
                         )
-                        LedgerRow(
-                            label = "电梯类型",
-                            value = item.record.elevatorType.takeIf { it != ElevatorType.UNKNOWN }
-                                ?.elevatorLabel() ?: "未填写",
-                        )
-                        LedgerRow(
-                            label = "门禁密码",
-                            value = item.record.accessCode.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "门是否完好",
-                            value = item.record.doorIntact.doorLabel(),
-                            valueColor = if (item.record.doorIntact == TriState.NO) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                        LedgerRow(
-                            label = "上面能开门",
-                            value = item.record.canOpenFromAbove.canOpenLabel(),
-                            valueColor = if (item.record.canOpenFromAbove == TriState.NO) {
-                                LocalLouJiStatusColors.current.stair
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
+                        if (showEmptyDetailFields ||
+                            item.record.elevatorType != ElevatorType.UNKNOWN
+                        ) {
+                            LedgerRow(
+                                label = "电梯类型",
+                                value = item.record.elevatorType.takeIf { it != ElevatorType.UNKNOWN }
+                                    ?.elevatorLabel() ?: "未填写",
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.accessCode.isNotBlank()) {
+                            LedgerRow(
+                                label = "门禁密码",
+                                value = item.record.accessCode.ifBlank { "未填写" },
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.doorIntact != TriState.UNKNOWN) {
+                            LedgerRow(
+                                label = "门是否完好",
+                                value = item.record.doorIntact.doorLabel(),
+                                valueColor = if (item.record.doorIntact == TriState.NO) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.canOpenFromAbove != TriState.UNKNOWN) {
+                            LedgerRow(
+                                label = "上面能开门",
+                                value = item.record.canOpenFromAbove.canOpenLabel(),
+                                valueColor = if (item.record.canOpenFromAbove == TriState.NO) {
+                                    LocalLouJiStatusColors.current.stair
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
                         LedgerRow(
                             label = "不用爬楼",
                             value = when (item.record.noStairs) {
@@ -370,40 +383,52 @@ fun RecordDetailScreen(
                                 TriState.UNKNOWN -> "待确认"
                             },
                         )
-                        LedgerRow(
-                            label = "会下来拿",
-                            value = when (item.record.willComeDown) {
-                                TriState.YES -> "会"
-                                TriState.NO -> "不会"
-                                TriState.UNKNOWN -> "未知"
-                            },
-                            valueColor = if (item.record.willComeDown == TriState.YES) {
-                                LocalLouJiStatusColors.current.noStair
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                        LedgerRow(
-                            label = "爬楼说明",
-                            value = item.record.climbNote.ifBlank { "未填写" },
-                        )
+                        if (showEmptyDetailFields || item.record.willComeDown != TriState.UNKNOWN) {
+                            LedgerRow(
+                                label = "会下来拿",
+                                value = when (item.record.willComeDown) {
+                                    TriState.YES -> "会"
+                                    TriState.NO -> "不会"
+                                    TriState.UNKNOWN -> "未知"
+                                },
+                                valueColor = if (item.record.willComeDown == TriState.YES) {
+                                    LocalLouJiStatusColors.current.noStair
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.climbNote.isNotBlank()) {
+                            LedgerRow(
+                                label = "爬楼说明",
+                                value = item.record.climbNote.ifBlank { "未填写" },
+                            )
+                        }
 
                         Spacer(Modifier.height(20.dp))
                         SectionHeader("订单")
                         Spacer(Modifier.height(4.dp))
-                        LedgerRow(
-                            label = "订单号",
-                            value = item.record.orderNo.ifBlank { "未填写" },
-                        )
-                        LedgerRow(label = "性别", value = item.record.gender.label())
-                        LedgerRow(
-                            label = "手机尾号",
-                            value = item.record.phoneTail.ifBlank { "未填写" },
-                        )
-                        LedgerRow(
-                            label = "分机号",
-                            value = item.record.phoneExt.ifBlank { "未填写" },
-                        )
+                        if (showEmptyDetailFields || item.record.orderNo.isNotBlank()) {
+                            LedgerRow(
+                                label = "订单号",
+                                value = item.record.orderNo.ifBlank { "未填写" },
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.gender != Gender.UNKNOWN) {
+                            LedgerRow(label = "性别", value = item.record.gender.label())
+                        }
+                        if (showEmptyDetailFields || item.record.phoneTail.isNotBlank()) {
+                            LedgerRow(
+                                label = "手机尾号",
+                                value = item.record.phoneTail.ifBlank { "未填写" },
+                            )
+                        }
+                        if (showEmptyDetailFields || item.record.phoneExt.isNotBlank()) {
+                            LedgerRow(
+                                label = "分机号",
+                                value = item.record.phoneExt.ifBlank { "未填写" },
+                            )
+                        }
                         if (item.record.phoneTail.isNotBlank() ||
                             item.record.phoneExt.isNotBlank()
                         ) {
@@ -522,22 +547,24 @@ fun RecordDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            OutlinedButton(
-                                onClick = { onOpenMediaScreen(item.record.id) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("detail_media_gallery"),
-                                shape = RoundedCornerShape(10.dp),
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_gallery),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("汇总查看全部 ${item.attachments.size} 个现场附件")
+                            if (mediaProToolsEnabled) {
+                                OutlinedButton(
+                                    onClick = { onOpenMediaScreen(item.record.id) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("detail_media_gallery"),
+                                    shape = RoundedCornerShape(10.dp),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_gallery),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("汇总查看全部 ${item.attachments.size} 个现场附件")
+                                }
+                                Spacer(Modifier.height(10.dp))
                             }
-                            Spacer(Modifier.height(10.dp))
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -560,7 +587,7 @@ fun RecordDetailScreen(
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
-                                            if (attachment.type ==
+                                            if (mediaProToolsEnabled && attachment.type ==
                                                 com.quabtun.louji.model.MediaType.IMAGE
                                             ) {
                                                 TextButton(
