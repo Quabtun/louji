@@ -71,8 +71,11 @@ class GitHubUpdaterDownloadTest {
                     range == null -> MockResponse().setResponseCode(200)
                         .setBody(okio.Buffer().write(apkBytes))
                     else -> {
-                        val start = Regex("""bytes=(\d+)-""").find(range)
+                        // Clamp the client-supplied offset into the payload bounds; there is no
+                        // filesystem access here, but staying in-range keeps the mock honest.
+                        val requested = Regex("""bytes=(\d+)-""").find(range)
                             ?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        val start = requested.coerceIn(0, apkBytes.size)
                         MockResponse().setResponseCode(206)
                             .setHeader(
                                 "Content-Range",
