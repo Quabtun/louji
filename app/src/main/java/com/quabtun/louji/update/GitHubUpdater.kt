@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -93,9 +94,6 @@ class GitHubUpdater(
     }
 
     private fun selectUpdate(release: ReleaseDto): UpdateInfo? {
-        val checksumAsset = release.assets.firstOrNull {
-            it.name.endsWith(".sha256", ignoreCase = true)
-        }
         val selectedName = ApkAbiMatcher.select(
             release.assets.map { ApkAbiMatcher.AssetName(it.name) },
         ) ?: return null
@@ -105,11 +103,29 @@ class GitHubUpdater(
             notes = release.body.trim(),
             apkUrl = apk.downloadUrl,
             apkSize = apk.size,
-            sha256Url = checksumAsset?.downloadUrl,
+            sha256Url = checksumUrlFor(release.assets, apk.name),
             apkName = apk.name,
         )
         verifyTrustedUrl(info.apkUrl)
+        info.sha256Url?.let { verifyTrustedUrl(it) }
         return info
+    }
+
+    /**
+     * Prefers `"<apk.name>.sha256"` (per-ABI checksums); falls back to a combined checksum file
+     * whose text is matched line-by-line against the apk file name. Never blindly trusts the
+     * first `.sha256` asset when several builds are published.
+     */
+    private fun checksumUrlFor(assets: List<AssetDto>, apkName: String): String? {
+        val checksumAssets = assets.filter { it.name.endsWith(".sha256", ignoreCase = true) }
+        if (checksumAssets.isEmpty()) return null
+        checksumAssets.firstOrNull { it.name.equals("$apkName.sha256", ignoreCase = true) }
+            ?.let { return it.downloadUrl }
+        // A combined file is only usable when it mentions our exact apk name; otherwise the
+        // checksum would be ambiguous across per-ABI builds.
+        return checksumAssets
+            .firstOrNull { !ApkAbiMatcher.isAbiSpecific(it.name.removeSuffix(".sha256")) }
+            ?.downloadUrl
     }
 
     // ------------------------------------------------------------- cache inspection
@@ -220,7 +236,7 @@ class GitHubUpdater(
      */
     suspend fun download(
         info: UpdateInfo,
-        onProgress: (Float) -> Unit = {},
+        onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit = { _, _ -> },
         forceRestart: Boolean = false,
     ): File = withContext(Dispatchers.IO) {
         if (info.apkSize > MAX_APK_BYTES) {
@@ -230,36 +246,51 @@ class GitHubUpdater(
         val target = File(updatesDir, "louji-$version.apk")
         val partial = File(updatesDir, "louji-$version.apk.part")
 
+        // Checksum first: reuse target must not skip verification when only the URL is known.
+        val resolved = resolveChecksum(info)
+        val verifiedInfo = info.copy(sha256 = resolved.sha256)
+
         // Already-complete file wins: never download the same version twice.
-        if (!forceRestart && target.isFile && isVerified(target, info)) {
-            saveMeta(info.copy(sha256 = info.sha256), target.name)
-            onProgress(1f)
+        if (!forceRestart && target.isFile && isVerified(target, verifiedInfo)) {
+            saveMeta(verifiedInfo, target.name)
+            onProgress(target.length(), info.apkSize)
             return@withContext target
         }
 
-        val resolved = resolveChecksum(info)
         val resumeFrom = if (forceRestart) {
             partial.delete()
             0L
         } else {
             partial.takeIf { it.isFile && it.length() > 0 }?.length() ?: 0L
         }
-        if (info.apkSize > 0 && resumeFrom > info.apkSize) {
-            // Partial grew past the expected size: the bytes are junk.
+        var offset = resumeFrom
+        if (info.apkSize > 0 && offset > info.apkSize) {
+            // Partial grew past the expected size: the bytes are junk, restart at zero and
+            // make sure the request does NOT carry the stale offset.
             partial.delete()
+            offset = 0L
         }
 
-        var written = if (partial.isFile) partial.length() else 0L
-        var bodyUsed = false
+        // Persist metadata BEFORE any bytes flow, so a killed process still leaves enough on
+        // disk for `inspectCachedUpdate` to see the partial and offer "继续下载".
+        saveMeta(verifiedInfo, target.name)
+
+        var written = offset
+        // Captured from the live response; the final saveMeta must keep it, otherwise the
+        // next resume would lose its If-Range anchor.
+        var capturedTag: String? = null
         try {
-            val response = openDownload(info, resumeFrom, resolved.eTag)
+            val response = openDownload(verifiedInfo, offset, resolved.eTag)
             var append = false
             response.use { resp ->
                 val code = resp.code
+                // Capture the CDN validators now: they are what makes a later resume possible.
+                val remoteTag = resp.header("ETag") ?: resp.header("Last-Modified")
+                capturedTag = remoteTag
                 when {
                     code == 206 -> {
                         val start = contentRangeStart(resp.header("Content-Range"))
-                        if (start != resumeFrom) {
+                        if (start != offset) {
                             // Server resumed from somewhere else: restart from zero safely.
                             partial.delete()
                             written = 0L
@@ -280,16 +311,18 @@ class GitHubUpdater(
                     !resp.isSuccessful -> throw IOException("下载失败：HTTP $code")
                 }
                 // A complete 416 partial skips the body entirely.
-                if (resp.body == null) throw IOException("下载失败：没有内容")
-                val body = resp.body!!
-                bodyUsed = true
+                val body = resp.body ?: throw IOException("下载失败：没有内容")
 
                 val total = when {
                     code == 206 -> info.apkSize.takeIf { it > 0 }
-                        ?: (resumeFrom + body.contentLength())
+                        ?: (offset + body.contentLength())
                     else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
                 }
                 if (total > MAX_APK_BYTES) throw IOException("安装包过大，已停止下载")
+
+                // Refresh the validators as soon as the server answers; the meta file then
+                // carries a real ETag for the next resume attempt.
+                saveMeta(verifiedInfo.copy(eTag = remoteTag), target.name)
 
                 body.byteStream().use { input ->
                     // Append for a matching 206 resume, overwrite for anything else.
@@ -306,7 +339,7 @@ class GitHubUpdater(
                             }
                             output.write(buffer, 0, read)
                             if (total > 0) {
-                                onProgress((written.toFloat() / total).coerceIn(0f, 1f))
+                                onProgress(written, total)
                             }
                         }
                         output.flush()
@@ -331,8 +364,8 @@ class GitHubUpdater(
             if (!target.isFile || target.length() == 0L) {
                 throw IOException("下载文件无法保存")
             }
-            saveMeta(info.copy(sha256 = resolved.sha256), target.name)
-            onProgress(1f)
+            saveMeta(verifiedInfo.copy(eTag = capturedTag ?: verifiedInfo.eTag), target.name)
+            onProgress(target.length(), info.apkSize)
             target
         } catch (error: Throwable) {
             // Keep the .part for cancellation / IO failures so the download can resume.
@@ -350,29 +383,56 @@ class GitHubUpdater(
         val cached = info.sha256?.takeIf { it.length == 64 }
         if (cached != null) return@withContext Resolved(cached, info.eTag)
         val url = info.sha256Url ?: return@withContext Resolved(null, info.eTag)
-        Resolved(fetchChecksum(url), info.eTag)
+        Resolved(fetchChecksum(url, info.apkName), info.eTag)
     }
 
+    /**
+     * Opens the APK stream, trying the official URL first and then any whitelisted mirror host.
+     * Every attempt is still pinned to https + explicit host whitelist, and the final bytes are
+     * verified against the official `.sha256` before install.
+     */
     private fun openDownload(info: UpdateInfo, resumeFrom: Long, eTag: String?): Response {
-        // Byte streams come from the official asset URL only. A future mirror must be listed in
-        // ALLOWED_MIRROR_HOSTS before it is ever contacted, and the final bytes still have to
-        // match the checksum from the official .sha256 asset.
         if (!isTrustedHost(info.apkUrl)) throw IOException("更新地址不受信任")
-        val request = Request.Builder()
-            .url(info.apkUrl)
-            .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
-            .apply {
-                // Resume only when we can anchor the partial to the remote file (ETag).
-                // Without it a 206 could append bytes of a different release.
-                if (resumeFrom > 0 && !eTag.isNullOrBlank()) {
-                    header("Range", "bytes=$resumeFrom-")
-                    header("If-Range", eTag)
+        val candidates = ArrayList<String>()
+        candidates.add(info.apkUrl)
+        mirrorHosts
+            .filter { it.isNotBlank() && it.lowercase() in ALLOWED_MIRROR_HOSTS }
+            .forEach { mirror ->
+                withHost(info.apkUrl, mirror)?.let { candidate ->
+                    if (isTrustedHost(candidate) && !candidates.contains(candidate)) {
+                        candidates.add(candidate)
+                    }
                 }
             }
-            .build()
-        val response = client.newCall(request).execute()
-        verifyTrustedUrl(response.request.url.toString())
-        return response
+        var lastError: IOException? = null
+        candidates.forEach { candidate ->
+            try {
+                val request = Request.Builder()
+                    .url(candidate)
+                    .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
+                    .apply {
+                        // Resume only when we can anchor the partial to the remote file (ETag).
+                        // Without it a 206 could append bytes of a different release.
+                        if (resumeFrom > 0 && !eTag.isNullOrBlank()) {
+                            header("Range", "bytes=$resumeFrom-")
+                            header("If-Range", eTag)
+                        }
+                    }
+                    .build()
+                val response = client.newCall(request).execute()
+                verifyTrustedUrl(response.request.url.toString())
+                return response
+            } catch (error: IOException) {
+                lastError = error
+            }
+        }
+        throw lastError ?: IOException("下载失败：无法连接")
+    }
+
+    private fun withHost(url: String, host: String): String? {
+        val parsed = Uri.parse(url)
+        if (host.isBlank() || parsed.host.equals(host, true)) return url
+        return url.toHttpUrlOrNull()?.newBuilder()?.host(host)?.build()?.toString()
     }
 
     private fun contentRangeStart(header: String?): Long? {
@@ -418,7 +478,11 @@ class GitHubUpdater(
         return sha256(file).equals(sha, true)
     }
 
-    private fun fetchChecksum(url: String): String? {
+    /**
+     * Parses a `.sha256` asset. A per-APK file is just "hash"; a combined file is matched
+     * line-by-line against [apkName] so an ABI build can never pick up another ABI's hash.
+     */
+    private fun fetchChecksum(url: String, apkName: String): String? {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "LouJi/${BuildConfig.VERSION_NAME}")
@@ -426,11 +490,22 @@ class GitHubUpdater(
         client.newCall(request).execute().use { response ->
             verifyTrustedUrl(response.request.url.toString())
             if (!response.isSuccessful) return null
-            val text = response.body?.string().orEmpty().trim()
-            return text.split(Regex("\\s+")).firstOrNull()
-                ?.takeIf {
-                    it.length == 64 && it.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' }
+            val text = response.body?.string().orEmpty()
+            val valid: (String) -> Boolean = { token ->
+                token.length == 64 && token.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' }
+            }
+            // Combined format: "<hash>  <fileName>" per line.
+            text.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .firstOrNull { line ->
+                    val parts = line.split(Regex("\\s+"))
+                    parts.size >= 2 && parts[1].equals(apkName, ignoreCase = true) &&
+                        valid(parts[0])
                 }
+                ?.let { return it.split(Regex("\\s+")).first() }
+            // Single-checksum file: the first token on the first line.
+            return text.split(Regex("\\s+")).firstOrNull()?.takeIf(valid)
         }
     }
 

@@ -445,6 +445,7 @@ fun RecordListScreen(
                                     dateRange = dateRange,
                                     activeConditionCount = activeConditionCount,
                                     pendingCount = pendingCount,
+                                    batchAndArchiveEnabled = batchAndArchiveEnabled,
                                     onFilter = viewModel::setFilter,
                                     onOpenSheet = { showFilterSheet = true },
                                 )
@@ -835,6 +836,7 @@ private fun ChipRow(
     dateRange: DateRange,
     activeConditionCount: Int,
     pendingCount: Int,
+    batchAndArchiveEnabled: Boolean = true,
     onFilter: (RecordFilter) -> Unit,
     onOpenSheet: () -> Unit,
 ) {
@@ -843,11 +845,11 @@ private fun ChipRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 精简模式只留最常用的决策过滤；「会下楼」「雷区」属于进阶用法。
         listOf(
             RecordFilter.ALL to "全部",
             RecordFilter.STAIRS to "要爬楼",
             RecordFilter.NO_STAIRS to "免爬",
-            RecordFilter.WILL_COME_DOWN to "会下楼",
             RecordFilter.PENDING to "待确认" + if (pendingCount > 0) " $pendingCount" else "",
         ).forEach { (value, label) ->
             LouJiFilterChip(
@@ -857,22 +859,30 @@ private fun ChipRow(
                 modifier = Modifier.testTag("filter_${value.name}"),
             )
         }
-        LouJiFilterChip(
-            selected = filter == RecordFilter.WARNING,
-            onClick = { onFilter(RecordFilter.WARNING) },
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_warning),
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("雷区")
-                }
-            },
-            modifier = Modifier.testTag("filter_${RecordFilter.WARNING.name}"),
-        )
+        if (batchAndArchiveEnabled) {
+            LouJiFilterChip(
+                selected = filter == RecordFilter.WILL_COME_DOWN,
+                onClick = { onFilter(RecordFilter.WILL_COME_DOWN) },
+                label = { Text("会下楼") },
+                modifier = Modifier.testTag("filter_${RecordFilter.WILL_COME_DOWN.name}"),
+            )
+            LouJiFilterChip(
+                selected = filter == RecordFilter.WARNING,
+                onClick = { onFilter(RecordFilter.WARNING) },
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_warning),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("雷区")
+                    }
+                },
+                modifier = Modifier.testTag("filter_${RecordFilter.WARNING.name}"),
+            )
+        }
         LouJiFilterChip(
             selected = activeConditionCount > 0 || dateRange.isActive,
             onClick = onOpenSheet,

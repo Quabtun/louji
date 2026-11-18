@@ -145,6 +145,81 @@ class GitHubUpdaterDownloadTest {
     }
 
     @Test
+    fun metaFileIsWrittenBeforeBytesFlow() {
+        // The response body stalls forever; if meta were only written at 100%, nothing would
+        // be on disk while the download is running. The pre-flight saveMeta must already have
+        // persisted the ETag + size by the time the first byte is requested.
+        clearMeta()
+        var sawRequest = false
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                sawRequest = true
+                // By the time the server sees the request, meta must exist (it is written
+                // before openDownload is called).
+                val metaOnDisk = File(cacheRoot, "update-meta.json")
+                assertTrue("meta must exist before first byte", metaOnDisk.isFile)
+                assertTrue(metaOnDisk.readText().contains("9.9.9"))
+                return MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("ETag", "\"abc-etag\"")
+                    .setBody(okio.Buffer().write(apkBytes))
+            }
+        }
+        val sha = updater.sha256(apkBytes.toFile("preflight.png"))
+        runBlockingDispatch { updater.download(info(sha = sha)) }
+        assertTrue(sawRequest)
+    }
+
+    @Test
+    fun metaFileExistsAfterPartialDownloadAndInspectReturnsPartial() {
+        clearMeta()
+        setUpDispatcher()
+        // The resume flow writes meta before the first byte; simulate a killed process by
+        // copying only the pre-flight meta + a truncated .part (exactly what crash leaves).
+        val sha = updater.sha256(apkBytes.toFile("meta-seed.png"))
+        val partial = partialFile("louji-9.9.9.apk.part")
+        partial.writeBytes(apkBytes.copyOfRange(0, 8))
+        val meta = """
+            {"versionName":"9.9.9","notes":"","apkUrl":"${server.url("/apk/louji-9.9.9.apk")}",
+             "apkSize":${apkBytes.size},"sha256":"$sha",
+             "eTag":"\"abc-etag\"","fileName":"louji-9.9.9.apk"}
+        """.trimIndent()
+        File(cacheRoot, "update-meta.json").writeText(meta)
+
+        val cached = updater.inspectCachedUpdate("2.2.0")
+
+        assertTrue(cached is CachedUpdate.Partial)
+        // The resumed request carries BOTH the real byte offset and the stored validator.
+        val file = runBlockingDispatch { updater.download((cached as CachedUpdate.Partial).info) }
+        val recorded = server.takeRequest()
+        assertEquals("bytes=8-", recorded.getHeader("Range"))
+        assertEquals("\"abc-etag\"", recorded.getHeader("If-Range"))
+        assertEquals(apkBytes.size.toLong(), file.length())
+    }
+
+    @Test
+    fun responseEtagIsPersistedIntoMetaAfterSuccess() {
+        clearMeta()
+        // Serve the bytes with a validator, then require it to land in update-meta.json.
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse =
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("ETag", "\"resp-etag-123\"")
+                    .setBody(okio.Buffer().write(apkBytes))
+        }
+        val sha = updater.sha256(apkBytes.toFile("etag-seed.png"))
+
+        val file = runBlockingDispatch { updater.download(info(sha = sha)) }
+
+        assertTrue(file.isFile)
+        val metaText = File(cacheRoot, "update-meta.json").readText()
+        // The response validator (or its Last-Modified fallback) must reach the meta file —
+        // this is what makes the next resume send Range + If-Range.
+        assertTrue(metaText.contains("resp-etag-123"))
+    }
+
+    @Test
     fun serverWithoutRangeSupportOverwritesFromScratch() {
         val partial = partialFile("louji-9.9.9.apk.part")
         partial.writeBytes("STALE-STALE-".toByteArray())

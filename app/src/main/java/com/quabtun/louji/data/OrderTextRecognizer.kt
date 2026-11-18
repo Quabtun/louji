@@ -157,6 +157,7 @@ class OrderTextRecognizer(
         }.onFailure { record("latin_init", it) }.getOrNull()
     }
     private val chineseBroken = AtomicBoolean(false)
+    private val chineseFailureCount = java.util.concurrent.atomic.AtomicInteger(0)
     private val firstRun = AtomicBoolean(true)
 
     /** Legacy entry point: raw text only. */
@@ -298,11 +299,14 @@ class OrderTextRecognizer(
                 if (outcome.error == null) {
                     engine = OcrResult.ENGINE_CHINESE
                     lines = outcome.lines
+                    // Any success proves the engine works: forget past failures.
+                    chineseFailureCount.set(0)
                 } else {
                     error = outcome.error
                     record("chinese_pass", outcome.throwable)
-                    // A recogniser that keeps failing would cost a timeout on every screenshot.
-                    if (outcome.fatal) {
+                    // Only a streak of consecutive engine-level failures (init/native broken)
+                    // trips the breaker; a single bad image must not kill future screenshots.
+                    if (outcome.fatal && chineseFailureCount.incrementAndGet() >= BREAKER_THRESHOLD) {
                         chineseBroken.set(true)
                         runCatching { client.close() }
                     }
@@ -434,5 +438,8 @@ class OrderTextRecognizer(
         const val FIRST_RUN_TIMEOUT_SECONDS = 30L
         const val MAX_WIDTH = 1_400
         const val MAX_DECODE_PIXELS = 14_000_000L
+
+        /** Consecutive engine-level failures after which the Chinese model is abandoned. */
+        const val BREAKER_THRESHOLD = 3
     }
 }

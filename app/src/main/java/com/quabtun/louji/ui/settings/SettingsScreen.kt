@@ -467,17 +467,16 @@ fun SettingsScreen(
                         supportingContent = {
                             Text(
                                 when (val update = updateState) {
-                                    is UpdateUiState.Ready ->
-                                        "已下载 v${update.info.versionName} 待安装 · 点击打开"
+                                    is UpdateUiState.Ready -> "已下载 v${update.info.versionName} 待安装"
                                     is UpdateUiState.Downloading ->
-                                        "正在下载新版本… ${(update.progress * 100).toInt()}%"
+                                        "后台正在下载 ${(update.progress * 100).toInt()}%"
                                     is UpdateUiState.Paused -> {
                                         val percent = if (update.totalBytes > 0) {
                                             (update.downloadedBytes * 100 / update.totalBytes).toInt()
                                         } else {
                                             0
                                         }
-                                        "下载已暂停（$percent%）· 点击继续"
+                                        "下载已暂停（$percent%）"
                                     }
                                     is UpdateUiState.Checking -> "正在检查…"
                                     else -> "从 GitHub Releases 获取最新版本"
@@ -492,20 +491,25 @@ fun SettingsScreen(
                                     strokeWidth = 2.dp,
                                 )
                             } else {
-                                IconButton(
-                                    onClick = {
-                                        // A cached package wins: open the sheet without network.
-                                        if (!updateViewModel.inspectCache()) {
-                                            updateViewModel.checkNow()
-                                        }
+                                // Clear action hint for the state the rider is actually in.
+                                Text(
+                                    text = when (updateState) {
+                                        is UpdateUiState.Ready -> "打开安装"
+                                        is UpdateUiState.Paused -> "继续下载"
+                                        is UpdateUiState.Downloading -> "查看进度"
+                                        else -> "立即检查"
                                     },
-                                    modifier = Modifier.testTag("check_update"),
-                                ) {
-                                    Icon(Icons.Filled.Refresh, contentDescription = "检查更新")
-                                }
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
                             }
                         },
                         modifier = Modifier
+                            .clickable {
+                                // Ready / Paused / Downloading open the sheet directly — offline
+                                // install and resume never require a network round-trip.
+                                updateViewModel.openCachedOrCheck()
+                            }
                             .let { base ->
                                 if (updateState is UpdateUiState.Ready ||
                                     updateState is UpdateUiState.Paused

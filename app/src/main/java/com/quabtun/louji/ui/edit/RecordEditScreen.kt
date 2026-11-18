@@ -150,6 +150,9 @@ fun RecordEditScreen(
     var showCategorySheetFor by remember { mutableStateOf<Long?>(null) }
     var showPendingCategoryFor by remember { mutableStateOf<Int?>(null) }
     var voiceFailed by remember { mutableStateOf(false) }
+    var expandedThisTime by remember { mutableStateOf(false) }
+    // "展开更多不常用字段（本次生效）": one-off escape hatch from simplified mode.
+    val effectiveFullFields = fullFormFields || expandedThisTime
     var annotatingPending by remember { mutableStateOf<com.quabtun.louji.model.MediaDraft?>(null) }
     val formScrollState = rememberScrollState()
     var autoPasted by remember { mutableStateOf(false) }
@@ -368,13 +371,26 @@ fun RecordEditScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
                 Box(modifier = Modifier.navigationBarsPadding().imePadding()) {
-                    Button(
-                        onClick = { viewModel.save(onSaved) },
-                        enabled = !ui.saving,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp)
-                            .height(52.dp)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Simplified mode still lets the rider reach the pro fields for one
+                        // session without leaving for Settings.
+                        if (!fullFormFields && !expandedThisTime) {
+                            TextButton(
+                                onClick = { expandedThisTime = true },
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .testTag("expand_more_fields"),
+                            ) {
+                                Text("展开更多不常用字段（本次生效）")
+                            }
+                        }
+                        Button(
+                            onClick = { viewModel.save(onSaved) },
+                            enabled = !ui.saving,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                                .height(52.dp)
                             .testTag("save_record"),
                         shape = RoundedCornerShape(12.dp),
                     ) {
@@ -385,6 +401,7 @@ fun RecordEditScreen(
                             )
                         } else {
                             Text("保存记录", fontWeight = FontWeight.SemiBold)
+                        }
                         }
                     }
                 }
@@ -430,7 +447,7 @@ fun RecordEditScreen(
                                 onClick = { pasteOrder() },
                             )
                             ToolTile(
-                                label = if (ui.recognizing) "识别中…" else "识图填单",
+                                label = "识图填单",
                                 caption = "OCR + 挂图",
                                 icon = R.drawable.ic_gallery,
                                 modifier = Modifier.weight(1f).testTag("ocr_order"),
@@ -442,26 +459,30 @@ fun RecordEditScreen(
                                     )
                                 },
                             )
-                            ToolTile(
-                                label = "语音速记",
-                                caption = "说出房号",
-                                icon = R.drawable.ic_mic,
-                                modifier = Modifier.weight(1f).testTag("voice_input"),
-                                onClick = {
-                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                        putExtra(
-                                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                        )
-                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "说出位置、楼层和房号")
-                                    }
-                                    try {
-                                        voiceLauncher.launch(intent)
-                                    } catch (_: ActivityNotFoundException) {
-                                        voiceFailed = true
-                                    }
-                                },
-                            )
+                            // Voice dictation is a low-frequency power tool: only in full mode,
+                            // where it fills the advanced field set too.
+                            if (effectiveFullFields) {
+                                ToolTile(
+                                    label = "语音速记",
+                                    caption = "说出房号",
+                                    icon = R.drawable.ic_mic,
+                                    modifier = Modifier.weight(1f).testTag("voice_input"),
+                                    onClick = {
+                                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                            putExtra(
+                                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                            )
+                                            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出位置、楼层和房号")
+                                        }
+                                        try {
+                                            voiceLauncher.launch(intent)
+                                        } catch (_: ActivityNotFoundException) {
+                                            voiceFailed = true
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -701,75 +722,80 @@ fun RecordEditScreen(
                         },
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text("电梯类型", style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.height(6.dp))
-                    TileSegmentedSelector(
-                        options = ElevatorType.entries.map { it to it.elevatorLabel() },
-                        selected = ui.draft.elevatorType,
-                        onSelect = viewModel::setElevatorType,
-                        columns = 2,
-                        testTagPrefix = "elevator",
+                    // 手机尾号 is high-frequency: always visible, even in simplified mode.
+                    OutlinedTextField(
+                        value = ui.draft.phoneTail,
+                        onValueChange = viewModel::setPhoneTail,
+                        modifier = Modifier.fillMaxWidth().testTag("field_tail"),
+                        label = { Text("手机尾号") },
+                        singleLine = true,
+                        isError = ui.errors.phoneTail != null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Text("门是否完好", style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.height(6.dp))
-                    TileSegmentedSelector(
-                        options = listOf(
-                            TriState.YES to "完好",
-                            TriState.NO to "有问题",
-                            TriState.UNKNOWN to "未知",
-                        ),
-                        selected = ui.draft.doorIntact,
-                        onSelect = viewModel::setDoorIntact,
-                        testTagPrefix = "door",
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text("上面能否开门", style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.height(6.dp))
-                    TileSegmentedSelector(
-                        options = listOf(
-                            TriState.YES to "能开门",
-                            TriState.NO to "不能开",
-                            TriState.UNKNOWN to "未知",
-                        ),
-                        selected = ui.draft.canOpenFromAbove,
-                        onSelect = viewModel::setCanOpenFromAbove,
-                        testTagPrefix = "open_above",
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "保存时同步更新楼栋攻略",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // 电梯 / 门锁 / 远程开门 / 楼栋同步 are hardware-profiling fields: they only
+                    // matter when the rider maintains the full building guide.
+                    if (effectiveFullFields) {
+                        Text("电梯类型", style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(6.dp))
+                        TileSegmentedSelector(
+                            options = ElevatorType.entries.map { it to it.elevatorLabel() },
+                            selected = ui.draft.elevatorType,
+                            onSelect = viewModel::setElevatorType,
+                            columns = 2,
+                            testTagPrefix = "elevator",
                         )
-                        Switch(
-                            checked = ui.syncBuildingProfile,
-                            onCheckedChange = viewModel::setSyncBuildingProfile,
+                        Spacer(Modifier.height(10.dp))
+                        Text("门是否完好", style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(6.dp))
+                        TileSegmentedSelector(
+                            options = listOf(
+                                TriState.YES to "完好",
+                                TriState.NO to "有问题",
+                                TriState.UNKNOWN to "未知",
+                            ),
+                            selected = ui.draft.doorIntact,
+                            onSelect = viewModel::setDoorIntact,
+                            testTagPrefix = "door",
                         )
+                        Spacer(Modifier.height(10.dp))
+                        Text("上面能否开门", style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(6.dp))
+                        TileSegmentedSelector(
+                            options = listOf(
+                                TriState.YES to "能开门",
+                                TriState.NO to "不能开",
+                                TriState.UNKNOWN to "未知",
+                            ),
+                            selected = ui.draft.canOpenFromAbove,
+                            onSelect = viewModel::setCanOpenFromAbove,
+                            testTagPrefix = "open_above",
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "保存时同步更新楼栋攻略",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Switch(
+                                checked = ui.syncBuildingProfile,
+                                onCheckedChange = viewModel::setSyncBuildingProfile,
+                            )
+                        }
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
                 // ---- Card 3: customer (advanced; hidden in simplified mode) ----
-                if (fullFormFields) {
+                if (effectiveFullFields) {
                     FormCard(title = "客户与交付") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = ui.draft.phoneTail,
-                            onValueChange = viewModel::setPhoneTail,
-                            modifier = Modifier.weight(1f).testTag("field_tail"),
-                            label = { Text("手机尾号") },
-                            singleLine = true,
-                            isError = ui.errors.phoneTail != null,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        OutlinedTextField(
                             value = ui.draft.phoneExt,
                             onValueChange = viewModel::setPhoneExt,
-                            modifier = Modifier.weight(1f).testTag("field_ext"),
+                            modifier = Modifier.fillMaxWidth().testTag("field_ext"),
                             label = { Text("分机号") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -871,7 +897,7 @@ fun RecordEditScreen(
                 Spacer(Modifier.height(16.dp))
                 // ---- Card 4: order + remark ----
                 FormCard(title = "订单与备注") {
-                    if (fullFormFields) {
+                    if (effectiveFullFields) {
                         OutlinedTextField(
                             value = ui.draft.orderNo,
                             onValueChange = viewModel::setOrderNo,
@@ -915,40 +941,43 @@ fun RecordEditScreen(
                                     Spacer(Modifier.height(4.dp))
                                     // 48dp text buttons keep the two actions separate and tappable,
                                     // instead of two tiny overlays fighting for the same thumbnail.
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (attachment.type ==
-                                            com.quabtun.louji.model.MediaType.IMAGE
-                                        ) {
+                                    // Both are pro tools; simplified mode keeps only the remove (×).
+                                    if (mediaProTools) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (attachment.type ==
+                                                com.quabtun.louji.model.MediaType.IMAGE
+                                            ) {
+                                                TextButton(
+                                                    onClick = { onOpenAnnotate(attachment.id) },
+                                                    modifier = Modifier.testTag(
+                                                        "annotate_${attachment.id}",
+                                                    ),
+                                                    contentPadding = PaddingValues(horizontal = 6.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_brush),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(14.dp),
+                                                    )
+                                                    Spacer(Modifier.width(2.dp))
+                                                    Text("标注", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
                                             TextButton(
-                                                onClick = { onOpenAnnotate(attachment.id) },
-                                                modifier = Modifier.testTag(
-                                                    "annotate_${attachment.id}",
-                                                ),
+                                                onClick = { showCategorySheetFor = attachment.id },
                                                 contentPadding = PaddingValues(horizontal = 6.dp),
                                             ) {
                                                 Icon(
-                                                    painter = painterResource(R.drawable.ic_brush),
+                                                    painter = painterResource(R.drawable.ic_tag),
                                                     contentDescription = null,
                                                     modifier = Modifier.size(14.dp),
                                                 )
                                                 Spacer(Modifier.width(2.dp))
-                                                Text("标注", style = MaterialTheme.typography.labelSmall)
+                                                Text(
+                                                    text = attachment.category.categoryLabel(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
                                             }
-                                        }
-                                        TextButton(
-                                            onClick = { showCategorySheetFor = attachment.id },
-                                            contentPadding = PaddingValues(horizontal = 6.dp),
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_tag),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(14.dp),
-                                            )
-                                            Spacer(Modifier.width(2.dp))
-                                            Text(
-                                                text = attachment.category.categoryLabel(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                            )
                                         }
                                     }
                                 }
@@ -972,41 +1001,43 @@ fun RecordEditScreen(
                                         onRemove = { viewModel.removePending(media) },
                                     )
                                     Spacer(Modifier.height(4.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (media.type ==
-                                            com.quabtun.louji.model.MediaType.IMAGE
-                                        ) {
+                                    if (mediaProTools) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (media.type ==
+                                                com.quabtun.louji.model.MediaType.IMAGE
+                                            ) {
+                                                TextButton(
+                                                    onClick = { annotatingPending = media },
+                                                    modifier = Modifier.testTag(
+                                                        "pending_annotate_$index",
+                                                    ),
+                                                    contentPadding = PaddingValues(horizontal = 6.dp),
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_brush),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(14.dp),
+                                                    )
+                                                    Spacer(Modifier.width(2.dp))
+                                                    Text("标注", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
                                             TextButton(
-                                                onClick = { annotatingPending = media },
-                                                modifier = Modifier.testTag(
-                                                    "pending_annotate_$index",
-                                                ),
+                                                onClick = { showPendingCategoryFor = index },
                                                 contentPadding = PaddingValues(horizontal = 6.dp),
+                                                modifier = Modifier.testTag("pending_category_$index"),
                                             ) {
                                                 Icon(
-                                                    painter = painterResource(R.drawable.ic_brush),
+                                                    painter = painterResource(R.drawable.ic_tag),
                                                     contentDescription = null,
                                                     modifier = Modifier.size(14.dp),
                                                 )
                                                 Spacer(Modifier.width(2.dp))
-                                                Text("标注", style = MaterialTheme.typography.labelSmall)
+                                                Text(
+                                                    text = media.category.categoryLabel(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
                                             }
-                                        }
-                                        TextButton(
-                                            onClick = { showPendingCategoryFor = index },
-                                            contentPadding = PaddingValues(horizontal = 6.dp),
-                                            modifier = Modifier.testTag("pending_category_$index"),
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_tag),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(14.dp),
-                                            )
-                                            Spacer(Modifier.width(2.dp))
-                                            Text(
-                                                text = media.category.categoryLabel(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                            )
                                         }
                                     }
                                 }
@@ -1034,7 +1065,13 @@ fun RecordEditScreen(
             title = { Text("添加现场附件") },
             text = {
                 Column {
-                    Text("从相册选截图 / 照片 / 视频，或直接拍照录像。")
+                    Text(
+                        if (mediaProTools) {
+                            "从相册选截图 / 照片 / 视频，或直接拍照录像。"
+                        } else {
+                            "从相册选截图 / 照片，或直接拍照。"
+                        },
+                    )
                     Spacer(Modifier.height(10.dp))
                     TextButton(
                         onClick = {
@@ -1055,14 +1092,17 @@ fun RecordEditScreen(
                         },
                         modifier = Modifier.fillMaxWidth().testTag("media_photo"),
                     ) { Text("拍照") }
-                    TextButton(
-                        onClick = {
-                            showMediaSheet = false
-                            cameraVideo = true
-                            showCamera = true
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("media_video"),
-                    ) { Text("录像") }
+                    // 录像 is a pro tool: simplified mode keeps the picker to album + photo.
+                    if (mediaProTools) {
+                        TextButton(
+                            onClick = {
+                                showMediaSheet = false
+                                cameraVideo = true
+                                showCamera = true
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("media_video"),
+                        ) { Text("录像") }
+                    }
                 }
             },
             confirmButton = {},

@@ -43,6 +43,13 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow<UpdateUiState>(UpdateUiState.Hidden)
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
+    /**
+     * Sheet visibility is orthogonal to the download task: [minimize] only hides the UI while
+     * the download keeps running in the background.
+     */
+    private val _sheetVisible = MutableStateFlow(false)
+    val sheetVisible: StateFlow<Boolean> = _sheetVisible.asStateFlow()
+
     val currentVersion: String = BuildConfig.VERSION_NAME
 
     private var startupChecked = false
@@ -91,11 +98,70 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * Opens the sheet for whatever is already on disk / in flight (offline safe), or runs a
+     * remote check when there is nothing cached yet.
+     */
+    fun openCachedOrCheck() {
+        when (_state.value) {
+            is UpdateUiState.Downloading,
+            is UpdateUiState.Ready,
+            is UpdateUiState.Paused,
+            is UpdateUiState.NeedsPermission,
+            -> {
+                showSheet()
+                return
+            }
+            else -> Unit
+        }
+        // A live state with an empty sheet: refresh from the cache, then fall back to network.
+        if (inspectCache() && _state.value !is UpdateUiState.Hidden) {
+            showSheet()
+            return
+        }
+        checkNow()
+    }
+
+    /**
+     * Always queries the remote endpoint. A local partial of an older version must never block
+     * discovering a newer release: if the remote is newer than the cached version, the remote
+     * wins; otherwise the local cache stays and is reused without re-downloading.
+     */
     fun checkNow() {
         if (_state.value is UpdateUiState.Checking || _state.value is UpdateUiState.Downloading) return
-        // The cache is authoritative when it already holds a newer package.
-        if (inspectCache()) return
-        viewModelScope.launch { runCheck(manual = true) }
+        val cachedVersion = runCatching { container.updater.cachedInfoOrNull() }
+            .getOrNull()?.versionName
+        viewModelScope.launch {
+            showSheet()
+            _state.value = UpdateUiState.Checking
+            try {
+                val info = container.updater.check(BuildConfig.VERSION_NAME)
+                container.settings.setLastUpdateCheck(System.currentTimeMillis())
+                when {
+                    info != null -> _state.value = UpdateUiState.Available(info)
+                    cachedVersion != null && cachedInfoOrInspect() != null -> {
+                        // Remote has nothing newer than the cached partial/full: reuse it.
+                        inspectCache()
+                        if (_state.value is UpdateUiState.Hidden) {
+                            _state.value = UpdateUiState.UpToDate(manual = true)
+                        }
+                    }
+                    else -> _state.value = UpdateUiState.UpToDate(manual = true)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                _state.value = UpdateUiState.Error(error.message ?: "检查更新失败", manual = true)
+            }
+        }
+    }
+
+    private fun cachedInfoOrInspect(): UpdateInfo? {
+        return container.updater.cachedInfoOrNull()?.also { if (_state.value is UpdateUiState.Hidden) inspectCache() }
+    }
+
+    fun showSheet() {
+        _sheetVisible.value = true
     }
 
     fun download(forceRestart: Boolean = false) {
@@ -113,24 +179,32 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
             (current as? UpdateUiState.Paused)?.downloadedBytes ?: 0L
         }
         _state.value = UpdateUiState.Downloading(info, 0f, startedBytes, info.apkSize)
+        showSheet()
         downloadJob = viewModelScope.launch {
             try {
                 val file = container.updater.download(
                     info = info,
                     forceRestart = forceRestart,
-                    onProgress = { progress: Float ->
+                    onProgress = { downloaded: Long, total: Long ->
                         if (generation == downloadGeneration && !downloadPaused) {
+                            val fraction = if (total > 0) {
+                                (downloaded.toFloat() / total).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            }
                             _state.value = UpdateUiState.Downloading(
                                 info = info,
-                                progress = progress,
-                                downloadedBytes = (progress * info.apkSize).toLong(),
-                                totalBytes = info.apkSize,
+                                progress = fraction,
+                                downloadedBytes = downloaded,
+                                totalBytes = total,
                             )
                         }
                     },
                 )
                 if (generation == downloadGeneration) {
                     _state.value = UpdateUiState.Ready(info, file)
+                    // Download finished while minimized: surface it again so the rider can install.
+                    _sheetVisible.value = true
                 }
             } catch (error: CancellationException) {
                 // Pause / minimize: the updater keeps the .part so nothing is lost.
@@ -149,6 +223,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
                             message = error.message ?: "下载失败，请重试",
                             manual = true,
                         )
+                        _sheetVisible.value = true
                     } else {
                         // Keep the partial bytes visible as paused, not as a dead end.
                         _state.value = UpdateUiState.Paused(
@@ -169,7 +244,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
         _state.value = UpdateUiState.Paused(
             info = downloading.info,
             downloadedBytes = currentPartialBytes(downloading.info),
-            totalBytes = downloading.info.apkSize,
+            totalBytes = downloading.totalBytes.takeIf { it > 0 } ?: downloading.info.apkSize,
         )
         downloadGeneration++
         downloadJob?.cancel()
@@ -186,6 +261,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
         val target = installTarget(_state.value) ?: return
         if (!container.updater.canInstallPackages()) {
             _state.value = UpdateUiState.NeedsPermission(target.first, target.second)
+            _sheetVisible.value = true
             return
         }
         try {
@@ -195,6 +271,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
                 message = error.message ?: "无法打开安装器",
                 manual = true,
             )
+            _sheetVisible.value = true
         }
     }
 
@@ -206,23 +283,24 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
                 message = error.message ?: "无法打开系统设置",
                 manual = true,
             )
+            _sheetVisible.value = true
         }
     }
 
     /**
-     * Minimizes the sheet. A running download keeps going in the background; a paused one keeps
-     * its bytes for later. Nothing is deleted here.
+     * Minimizes the sheet only. The download task keeps running with its live state untouched;
+     * a later `onProgress` update cannot re-open the UI because it never touches
+     * `sheetVisible`.
      */
     fun minimize() {
-        _state.value = UpdateUiState.Hidden
+        _sheetVisible.value = false
     }
-
-    fun dismiss() = minimize()
 
     fun consumeUpToDate(): Boolean {
         val current = _state.value
         if (current is UpdateUiState.UpToDate && current.manual) {
             _state.value = UpdateUiState.Hidden
+            _sheetVisible.value = false
             return true
         }
         return false
@@ -232,6 +310,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
         val current = _state.value
         if (current is UpdateUiState.Error && current.manual) {
             _state.value = UpdateUiState.Hidden
+            _sheetVisible.value = false
             return current.message
         }
         return null
@@ -247,6 +326,8 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
             } else {
                 UpdateUiState.Available(info)
             }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             _state.value = if (manual) {
                 UpdateUiState.Error(error.message ?: "检查更新失败", manual = true)

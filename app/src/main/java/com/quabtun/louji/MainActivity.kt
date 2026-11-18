@@ -172,6 +172,7 @@ private fun LouJiRoot(
     val factory = remember(container) { AppViewModelFactory(container) }
     val updateViewModel: UpdateViewModel = viewModel(factory = factory)
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    val updateSheetVisible by updateViewModel.sheetVisible.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var settings by remember { mutableStateOf(AppSettings()) }
@@ -508,6 +509,7 @@ private fun LouJiRoot(
                                 },
                                 mediaProToolsEnabled = settings.enableMediaProTools,
                                 showEmptyDetailFields = settings.showEmptyDetailFields,
+                                batchAndArchiveEnabled = settings.enableBatchAndArchive,
                                 onOpenBuilding = { location ->
                                     navController.navigate("building/${Uri.encode(location)}")
                                 },
@@ -709,23 +711,27 @@ private fun LouJiRoot(
             )
         }
 
-        when (val state = updateState) {
-            is UpdateUiState.Available,
-            is UpdateUiState.Downloading,
-            is UpdateUiState.Ready,
-            is UpdateUiState.NeedsPermission,
-            is UpdateUiState.Paused,
-            -> UpdateSheet(
-                state = state,
-                onDismiss = updateViewModel::minimize,
-                onDownload = { updateViewModel.download() },
-                onInstall = updateViewModel::install,
-                onOpenInstallSettings = updateViewModel::openInstallPermissionSettings,
-                onPauseDownload = updateViewModel::pauseDownload,
-                onResumeDownload = { updateViewModel.download() },
-                onRestartDownload = { updateViewModel.download(forceRestart = true) },
-            )
-            else -> Unit
+        // Sheet visibility is driven by its own flag so "后台下载" can minimize without the
+        // next onProgress tick popping the sheet back open.
+        if (updateSheetVisible) {
+            when (val state = updateState) {
+                is UpdateUiState.Available,
+                is UpdateUiState.Downloading,
+                is UpdateUiState.Ready,
+                is UpdateUiState.NeedsPermission,
+                is UpdateUiState.Paused,
+                -> UpdateSheet(
+                    state = state,
+                    onDismiss = updateViewModel::minimize,
+                    onDownload = { updateViewModel.download() },
+                    onInstall = updateViewModel::install,
+                    onOpenInstallSettings = updateViewModel::openInstallPermissionSettings,
+                    onPauseDownload = updateViewModel::pauseDownload,
+                    onResumeDownload = { updateViewModel.download() },
+                    onRestartDownload = { updateViewModel.download(forceRestart = true) },
+                )
+                else -> Unit
+            }
         }
     }
 }

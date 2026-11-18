@@ -116,6 +116,7 @@ fun RecordDetailScreen(
     onOpenMediaScreen: (Long) -> Unit = {},
     mediaProToolsEnabled: Boolean = true,
     showEmptyDetailFields: Boolean = true,
+    batchAndArchiveEnabled: Boolean = true,
     onOpenBuilding: (String) -> Unit,
     onOpenAnnotate: (Long) -> Unit,
 ) {
@@ -203,15 +204,19 @@ fun RecordDetailScreen(
                                             onDuplicate(item.record.id)
                                         },
                                     )
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(if (item.record.archived) "取消归档" else "归档")
-                                        },
-                                        onClick = {
-                                            menuExpanded = false
-                                            onArchive(!item.record.archived)
-                                        },
-                                    )
+                                    // Simplified mode has no archived entry point, so archiving
+                                    // would strand the record — hide it there too.
+                                    if (batchAndArchiveEnabled) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(if (item.record.archived) "取消归档" else "归档")
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onArchive(!item.record.archived)
+                                            },
+                                        )
+                                    }
                                     DropdownMenuItem(
                                         text = { Text("复制摘要") },
                                         leadingIcon = {
@@ -405,9 +410,17 @@ fun RecordDetailScreen(
                             )
                         }
 
-                        Spacer(Modifier.height(20.dp))
-                        SectionHeader("订单")
-                        Spacer(Modifier.height(4.dp))
+                        // Hide the whole "订单" group when nothing in it was filled.
+                        val orderGroupHasContent = showEmptyDetailFields ||
+                            item.record.orderNo.isNotBlank() ||
+                            item.record.gender != Gender.UNKNOWN ||
+                            item.record.phoneTail.isNotBlank() ||
+                            item.record.phoneExt.isNotBlank()
+                        if (orderGroupHasContent) {
+                            Spacer(Modifier.height(20.dp))
+                            SectionHeader("订单")
+                            Spacer(Modifier.height(4.dp))
+                        }
                         if (showEmptyDetailFields || item.record.orderNo.isNotBlank()) {
                             LedgerRow(
                                 label = "订单号",
@@ -489,39 +502,48 @@ fun RecordDetailScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(20.dp))
-                        SectionHeader("客户")
-                        Spacer(Modifier.height(10.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            SemanticPill(
-                                text = when (item.record.willComeDown) {
-                                    TriState.YES -> "会下楼"
-                                    TriState.NO -> "不会下楼"
-                                    TriState.UNKNOWN -> "下楼未知"
-                                },
-                                tone = if (item.record.willComeDown == TriState.YES) {
-                                    PillTone.PASS
-                                } else {
-                                    PillTone.NEUTRAL
-                                },
-                                iconRes = R.drawable.ic_elevator,
-                            )
-                            if (item.record.deliveryMethod != DeliveryMethod.UNKNOWN) {
+                        // "客户" group only renders when it carries real information; an unknown
+                        // attitude with no tags/notes is noise, not a section.
+                        val customerGroupHasContent = showEmptyDetailFields ||
+                            item.record.willComeDown != TriState.UNKNOWN ||
+                            item.record.deliveryMethod != DeliveryMethod.UNKNOWN ||
+                            item.record.personalityTags.isNotEmpty() ||
+                            item.record.personalityNote.isNotBlank()
+                        if (customerGroupHasContent) {
+                            Spacer(Modifier.height(20.dp))
+                            SectionHeader("客户")
+                            Spacer(Modifier.height(10.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
                                 SemanticPill(
-                                    text = item.record.deliveryMethod.deliveryLabel(),
-                                    tone = PillTone.NEUTRAL,
+                                    text = when (item.record.willComeDown) {
+                                        TriState.YES -> "会下楼"
+                                        TriState.NO -> "不会下楼"
+                                        TriState.UNKNOWN -> "下楼未知"
+                                    },
+                                    tone = if (item.record.willComeDown == TriState.YES) {
+                                        PillTone.PASS
+                                    } else {
+                                        PillTone.NEUTRAL
+                                    },
+                                    iconRes = R.drawable.ic_elevator,
                                 )
+                                if (item.record.deliveryMethod != DeliveryMethod.UNKNOWN) {
+                                    SemanticPill(
+                                        text = item.record.deliveryMethod.deliveryLabel(),
+                                        tone = PillTone.NEUTRAL,
+                                    )
+                                }
+                                item.record.personalityTags.forEach { tag ->
+                                    SemanticPill(text = tag, tone = PillTone.NEUTRAL)
+                                }
                             }
-                            item.record.personalityTags.forEach { tag ->
-                                SemanticPill(text = tag, tone = PillTone.NEUTRAL)
+                            if (item.record.personalityNote.isNotBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(item.record.personalityNote, style = MaterialTheme.typography.bodyLarge)
                             }
-                        }
-                        if (item.record.personalityNote.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(item.record.personalityNote, style = MaterialTheme.typography.bodyLarge)
                         }
 
                         Spacer(Modifier.height(20.dp))
