@@ -1,7 +1,7 @@
 # 楼记 · 测试与缺陷检测报告
 
-日期：2026-11-15
-版本：2.2.0
+日期：2026-11-19
+版本：2.3.0
 设备：Android Emulator `RiderClimbApi35`，API 35，x86_64，1080×2400 / 420dpi，后置模拟相机
 主机：Windows 10，JDK 17.0.20.1，Gradle 8.5，AGP 8.2.2，compileSdk/targetSdk 34，minSdk 24
 
@@ -17,7 +17,7 @@
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | v2.2.0 已签名（versionCode 35，47.8MB 含中文模型），已发布 GitHub Release | `apksigner verify` 通过；2.1.0 → 2.2.0 覆盖安装成功 |
+| Release APK | v2.3.0 已签名（versionCode 36，universal + 双 ABI 拆包），已发布 GitHub Release | `apksigner verify` 通过；2.2.0 → 2.3.0 覆盖安装成功 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（59）
