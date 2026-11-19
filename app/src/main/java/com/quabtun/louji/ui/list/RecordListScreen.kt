@@ -1052,40 +1052,43 @@ private fun FilterSheet(
                 onSelect = onSort,
                 testTagPrefix = "sheet_sort",
             )
-            Spacer(Modifier.height(16.dp))
-            Text("日期范围", style = MaterialTheme.typography.labelMedium)
-            Spacer(Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val now = remember { System.currentTimeMillis() }
-                val presets = listOf(7, 30, 90)
-                val matchedPreset = presets.firstOrNull { days ->
-                    val preset = DateRangePresets.lastDays(now, days)
-                    dateRange.isActive && dateRange.start == preset.start &&
-                        dateRange.end == preset.end
-                }
-                val isCustom = dateRange.isActive && matchedPreset == null
-                LouJiFilterChip(
-                    selected = !dateRange.isActive,
-                    onClick = { onDate(DateRange()) },
-                    label = { Text("全部") },
-                )
-                presets.forEach { days ->
+            // 日期区间是高级筛选：精简模式收起，保持台账首屏心智负担最低。
+            if (batchAndArchiveEnabled) {
+                Spacer(Modifier.height(16.dp))
+                Text("日期范围", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val now = remember { System.currentTimeMillis() }
+                    val presets = listOf(7, 30, 90)
+                    val matchedPreset = presets.firstOrNull { days ->
+                        val preset = DateRangePresets.lastDays(now, days)
+                        dateRange.isActive && dateRange.start == preset.start &&
+                            dateRange.end == preset.end
+                    }
+                    val isCustom = dateRange.isActive && matchedPreset == null
                     LouJiFilterChip(
-                        selected = matchedPreset == days,
-                        onClick = { onDate(DateRangePresets.lastDays(now, days)) },
-                        label = { Text("近${days}天") },
+                        selected = !dateRange.isActive,
+                        onClick = { onDate(DateRange()) },
+                        label = { Text("全部") },
+                    )
+                    presets.forEach { days ->
+                        LouJiFilterChip(
+                            selected = matchedPreset == days,
+                            onClick = { onDate(DateRangePresets.lastDays(now, days)) },
+                            label = { Text("近${days}天") },
+                        )
+                    }
+                    LouJiFilterChip(
+                        selected = isCustom,
+                        onClick = { showStartPicker = true },
+                        label = { Text("自定义") },
                     )
                 }
-                LouJiFilterChip(
-                    selected = isCustom,
-                    onClick = { showStartPicker = true },
-                    label = { Text("自定义") },
-                )
             }
-            if (dateRange.isActive) {
+            if (batchAndArchiveEnabled && dateRange.isActive) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = dateRangeLabel(dateRange),

@@ -46,6 +46,7 @@ private data class CachedUpdateMeta(
     val apkUrl: String = "",
     val apkSize: Long = 0,
     val sha256: String = "",
+    val sha256Url: String = "",
     val eTag: String = "",
     val fileName: String = "",
     val downloadedAt: Long = 0,
@@ -58,6 +59,8 @@ class GitHubUpdater(
     private val mirrorHosts: List<String> = emptyList(),
     /** Test-only escape hatch: adds hosts to the trust list without shipping a mirror. */
     private val trustedHostOverrides: Set<String> = emptySet(),
+    /** Test-only escape hatch: replaces the release API endpoint (MockWebServer). */
+    private val apiUrlOverride: String? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val updatesDir: File get() = File(context.cacheDir, "updates").apply { mkdirs() }
@@ -69,7 +72,7 @@ class GitHubUpdater(
      */
     suspend fun check(currentVersion: String): UpdateInfo? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url(BuildConfig.UPDATE_API)
+            .url(apiUrlOverride ?: BuildConfig.UPDATE_API)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "LouJi/$currentVersion")
             .build()
@@ -147,7 +150,8 @@ class GitHubUpdater(
             notes = meta.notes,
             apkUrl = meta.apkUrl,
             apkSize = meta.apkSize,
-            sha256Url = null,
+            // The checksum URL survives restarts so a resumed download can still verify.
+            sha256Url = meta.sha256Url.takeIf { it.isNotBlank() },
             sha256 = meta.sha256.takeIf { it.length == 64 },
             eTag = meta.eTag.takeIf { it.isNotBlank() },
         )
@@ -161,6 +165,7 @@ class GitHubUpdater(
                 apkUrl = info.apkUrl,
                 apkSize = info.apkSize,
                 sha256 = info.sha256.orEmpty(),
+                sha256Url = info.sha256Url.orEmpty(),
                 eTag = info.eTag.orEmpty(),
                 fileName = fileName,
                 downloadedAt = System.currentTimeMillis(),
@@ -223,9 +228,29 @@ class GitHubUpdater(
         }
     }
 
+    /** Same sweep, but keeps an explicit set of live names (used mid-download). */
+    private fun sweepForeignFiles(keepNames: Set<String>) {
+        updatesDir.listFiles()?.forEach { file ->
+            if (file.name !in keepNames &&
+                (file.name.endsWith(".apk", true) || file.name.endsWith(PART_SUFFIX, true))
+            ) {
+                file.delete()
+            }
+        }
+    }
+
     fun clearCache() {
         updatesDir.listFiles()?.forEach { it.delete() }
     }
+
+    /** Cache-layout accessors used by instrumentation to seed resume state. */
+    fun metaPath(): File = metaFile
+
+    fun partialPath(versionName: String): File =
+        File(updatesDir, "louji-${safeVersionName(versionName)}.apk$PART_SUFFIX")
+
+    fun fullPath(versionName: String): File =
+        File(updatesDir, "louji-${safeVersionName(versionName)}.apk")
 
     // ------------------------------------------------------------------- download
 
@@ -248,6 +273,12 @@ class GitHubUpdater(
 
         // Checksum first: reuse target must not skip verification when only the URL is known.
         val resolved = resolveChecksum(info)
+        // Security baseline: when the release PUBLISHES a .sha256 asset, the bytes may only be
+        // installed against that hash. A failed fetch (offline/hiccup) is a refusal, never a
+        // silent size-only pass.
+        if (resolved.sha256 == null && info.sha256Url != null) {
+            throw IOException("校验文件不可用，已停止下载；请联网后重试")
+        }
         val verifiedInfo = info.copy(sha256 = resolved.sha256)
 
         // Already-complete file wins: never download the same version twice.
@@ -274,6 +305,8 @@ class GitHubUpdater(
         // Persist metadata BEFORE any bytes flow, so a killed process still leaves enough on
         // disk for `inspectCachedUpdate` to see the partial and offer "继续下载".
         saveMeta(verifiedInfo, target.name)
+        // A previous version's partial/apk files are garbage once the meta points here.
+        sweepForeignFiles(keepNames = setOf(target.name, partial.name, META_FILE))
 
         var written = offset
         // Captured from the live response; the final saveMeta must keep it, otherwise the
@@ -480,7 +513,8 @@ class GitHubUpdater(
 
     /**
      * Parses a `.sha256` asset. A per-APK file is just "hash"; a combined file is matched
-     * line-by-line against [apkName] so an ABI build can never pick up another ABI's hash.
+     * line-by-line against [apkName]. A multi-line file that does NOT mention [apkName] is
+     * ambiguous across builds → returns null (refuse) instead of blindly taking the first hash.
      */
     private fun fetchChecksum(url: String, apkName: String): String? {
         val request = Request.Builder()
@@ -494,18 +528,21 @@ class GitHubUpdater(
             val valid: (String) -> Boolean = { token ->
                 token.length == 64 && token.all { char -> char.isDigit() || char.lowercaseChar() in 'a'..'f' }
             }
-            // Combined format: "<hash>  <fileName>" per line.
-            text.lineSequence()
+            val lines = text.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-                .firstOrNull { line ->
-                    val parts = line.split(Regex("\\s+"))
-                    parts.size >= 2 && parts[1].equals(apkName, ignoreCase = true) &&
-                        valid(parts[0])
-                }
-                ?.let { return it.split(Regex("\\s+")).first() }
-            // Single-checksum file: the first token on the first line.
-            return text.split(Regex("\\s+")).firstOrNull()?.takeIf(valid)
+                .toList()
+            // Combined format: "<hash>  <fileName>" per line — match our exact apk name.
+            lines.firstOrNull { line ->
+                val parts = line.split(Regex("\\s+"))
+                parts.size >= 2 && parts[1].equals(apkName, ignoreCase = true) && valid(parts[0])
+            }?.let { return it.split(Regex("\\s+")).first() }
+            // Single-checksum file: exactly one line whose first token is a hash.
+            if (lines.size == 1) {
+                return lines.single().split(Regex("\\s+")).firstOrNull()?.takeIf(valid)
+            }
+            // Multi-line but no match for our build: ambiguous, refuse rather than guess.
+            return null
         }
     }
 

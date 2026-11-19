@@ -39,7 +39,15 @@ sealed interface UpdateUiState {
     data class Error(val message: String, val manual: Boolean) : UpdateUiState
 }
 
-class UpdateViewModel(private val container: AppContainer) : ViewModel() {
+class UpdateViewModel(
+    private val container: AppContainer,
+    /**
+     * Test-only seam: overrides the container's updater so instrumentation can drive the
+     * download against a MockWebServer. Production always passes null (uses container's).
+     */
+    private val updaterOverride: com.quabtun.louji.update.GitHubUpdater? = null,
+) : ViewModel() {
+    private val updater get() = updaterOverride ?: container.updater
     private val _state = MutableStateFlow<UpdateUiState>(UpdateUiState.Hidden)
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
@@ -64,7 +72,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun inspectCache(): Boolean {
         return try {
-            when (val cached = container.updater.inspectCachedUpdate(BuildConfig.VERSION_NAME)) {
+            when (val cached = updater.inspectCachedUpdate(BuildConfig.VERSION_NAME)) {
                 is CachedUpdate.Ready -> {
                     _state.value = UpdateUiState.Ready(cached.info, cached.file)
                     true
@@ -100,7 +108,8 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
 
     /**
      * Opens the sheet for whatever is already on disk / in flight (offline safe), or runs a
-     * remote check when there is nothing cached yet.
+     * remote check when there is nothing cached yet. Also covers the startup-check window so
+     * tapping the row always gives visible feedback.
      */
     fun openCachedOrCheck() {
         when (_state.value) {
@@ -109,6 +118,11 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
             is UpdateUiState.Paused,
             is UpdateUiState.NeedsPermission,
             -> {
+                showSheet()
+                return
+            }
+            // A startup check is already in flight: surface the sheet instead of doing nothing.
+            is UpdateUiState.Checking -> {
                 showSheet()
                 return
             }
@@ -129,24 +143,35 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun checkNow() {
         if (_state.value is UpdateUiState.Checking || _state.value is UpdateUiState.Downloading) return
-        val cachedVersion = runCatching { container.updater.cachedInfoOrNull() }
-            .getOrNull()?.versionName
+        val manualCheck = true
         viewModelScope.launch {
             showSheet()
             _state.value = UpdateUiState.Checking
             try {
-                val info = container.updater.check(BuildConfig.VERSION_NAME)
+                val info = updater.check(BuildConfig.VERSION_NAME)
                 container.settings.setLastUpdateCheck(System.currentTimeMillis())
+                val cached = runCatching { updater.cachedInfoOrNull() }.getOrNull()
+                // "绝不重复下载同一版本": a remote that is not newer than what we already
+                // cached (full or partial) is superseded by the local cache.
+                val remoteSupersededByCache = info != null && cached != null &&
+                    !com.quabtun.louji.update.AppVersion.isNewer(info.versionName, cached.versionName)
                 when {
-                    info != null -> _state.value = UpdateUiState.Available(info)
-                    cachedVersion != null && cachedInfoOrInspect() != null -> {
-                        // Remote has nothing newer than the cached partial/full: reuse it.
+                    remoteSupersededByCache -> {
                         inspectCache()
-                        if (_state.value is UpdateUiState.Hidden) {
+                        if (_state.value is UpdateUiState.Hidden && manualCheck) {
                             _state.value = UpdateUiState.UpToDate(manual = true)
                         }
                     }
-                    else -> _state.value = UpdateUiState.UpToDate(manual = true)
+                    info != null -> _state.value = UpdateUiState.Available(info)
+                    else -> {
+                        if (inspectCache() && _state.value !is UpdateUiState.Hidden) {
+                            // Cache restored (Ready/Paused) — keep it visible.
+                        } else if (manualCheck) {
+                            _state.value = UpdateUiState.UpToDate(manual = true)
+                        } else {
+                            _state.value = UpdateUiState.Hidden
+                        }
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -157,7 +182,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun cachedInfoOrInspect(): UpdateInfo? {
-        return container.updater.cachedInfoOrNull()?.also { if (_state.value is UpdateUiState.Hidden) inspectCache() }
+        return updater.cachedInfoOrNull()?.also { if (_state.value is UpdateUiState.Hidden) inspectCache() }
     }
 
     fun showSheet() {
@@ -182,7 +207,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
         showSheet()
         downloadJob = viewModelScope.launch {
             try {
-                val file = container.updater.download(
+                val file = updater.download(
                     info = info,
                     forceRestart = forceRestart,
                     onProgress = { downloaded: Long, total: Long ->
@@ -259,13 +284,13 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
 
     fun install() {
         val target = installTarget(_state.value) ?: return
-        if (!container.updater.canInstallPackages()) {
+        if (!updater.canInstallPackages()) {
             _state.value = UpdateUiState.NeedsPermission(target.first, target.second)
             _sheetVisible.value = true
             return
         }
         try {
-            container.updater.install(target.second)
+            updater.install(target.second)
         } catch (error: Throwable) {
             _state.value = UpdateUiState.Error(
                 message = error.message ?: "无法打开安装器",
@@ -277,7 +302,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openInstallPermissionSettings() {
         try {
-            container.updater.openInstallPermissionSettings()
+            updater.openInstallPermissionSettings()
         } catch (error: Throwable) {
             _state.value = UpdateUiState.Error(
                 message = error.message ?: "无法打开系统设置",
@@ -319,7 +344,7 @@ class UpdateViewModel(private val container: AppContainer) : ViewModel() {
     private suspend fun runCheck(manual: Boolean) {
         _state.value = UpdateUiState.Checking
         try {
-            val info = container.updater.check(BuildConfig.VERSION_NAME)
+            val info = updater.check(BuildConfig.VERSION_NAME)
             container.settings.setLastUpdateCheck(System.currentTimeMillis())
             _state.value = if (info == null) {
                 if (manual) UpdateUiState.UpToDate(manual = true) else UpdateUiState.Hidden
