@@ -17,7 +17,7 @@
 | Android Lint | 0 error（仅依赖更新等 warning） | `app/build/reports/lint-results-debug.html` |
 | Mimosa 深度安全扫描 | 0 findings，65 packages | `scan-2026-11-05T18-53-28.463Z-438776529023` |
 | 可访问性（TalkBack + 2.0× 字体） | 列表/详情/表单内容描述正确、2.0× 可滚动不裁剪 | `docs/ACCESSIBILITY.md` |
-| Release APK | v2.3.0 已签名（versionCode 36，universal + 双 ABI 拆包），已发布 GitHub Release | `apksigner verify` 通过；2.2.0 → 2.3.0 覆盖安装成功 |
+| Release APK | v2.3.0 已签名（versionCode 36，universal + 双 ABI 拆包），已发布 GitHub Release（universal + 双 ABI 共 6 个资产）| `apksigner verify` 通过；2.2.0 → 2.3.0 覆盖安装成功 |
 | 应用内更新 E2E | 通过（v1.0.0 → v1.0.2 → … → v1.3.0）；v1.4.0 本地同签名覆盖安装验证 | 见第 6 节、`docs/screenshots/update-*.png` |
 
 ## 2. 单元测试（59）
